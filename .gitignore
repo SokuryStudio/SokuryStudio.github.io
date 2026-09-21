@@ -1,0 +1,14 @@
+# 실제 비밀 값이 들어갈 수 있는 파일 — 절대 커밋하지 마세요
+.env
+.env.local
+.env.*.local
+
+# Vercel CLI가 로컬에 만드는 프로젝트 연결 정보 (프로젝트 ID 등 노출 방지)
+.vercel
+
+# OS/에디터 잡파일
+.DS_Store
+Thumbs.db
+*.log
+.idea/
+.vscode/
