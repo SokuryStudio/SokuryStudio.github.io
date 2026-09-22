@@ -1,0 +1,407 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Sokury - 관리자</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@400;500;700;900&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --font: 'Noto Sans KR', 'Apple SD Gothic Neo', 'Malgun Gothic', sans-serif;
+    --bg: #f5f6fa; --surface: #ffffff; --surface-2: #f0f1f6; --border: #e3e5ec;
+    --text: #1c1e26; --text-dim: #6b6f80; --text-faint: #9a9db0;
+    --accent: #6C5CFC; --accent-soft: #ecebff; --danger: #e03131;
+    --radius: 14px; --shadow: 0 8px 24px rgba(20,20,40,0.08); --shadow-lg: 0 20px 60px rgba(10,10,30,0.28);
+    --cat-regular:#7C5CFC; --cat-ep:#12B886; --cat-single:#228BE6; --cat-mixtape:#F59F00;
+    --cat-compilation:#E64980; --cat-physical:#495057; --cat-concert:#E03131;
+  }
+  @media (prefers-color-scheme: dark){
+    :root:not([data-theme="light"]){
+      --bg:#14151c; --surface:#1c1e28; --surface-2:#23252f; --border:#31333f;
+      --text:#f0f1f6; --text-dim:#a7abc0; --text-faint:#6b6f80;
+      --accent-soft:#2b2650; --shadow:0 8px 24px rgba(0,0,0,0.4); --shadow-lg:0 20px 60px rgba(0,0,0,0.6);
+    }
+  }
+  :root[data-theme="dark"]{
+    --bg:#14151c; --surface:#1c1e28; --surface-2:#23252f; --border:#31333f;
+    --text:#f0f1f6; --text-dim:#a7abc0; --text-faint:#6b6f80;
+    --accent-soft:#2b2650; --shadow:0 8px 24px rgba(0,0,0,0.4); --shadow-lg:0 20px 60px rgba(0,0,0,0.6);
+  }
+  *{box-sizing:border-box;}
+  html,body{margin:0;padding:0;}
+  body{font-family:var(--font);background:var(--bg);color:var(--text);min-height:100vh;-webkit-font-smoothing:antialiased;}
+  a{color:inherit;text-decoration:none;}
+  button{font-family:var(--font);cursor:pointer;}
+  input,select,textarea{font-family:var(--font);}
+
+  #topbar{
+    display:flex;align-items:center;justify-content:space-between;padding:14px 24px;
+    background:var(--surface);border-bottom:1px solid var(--border);position:sticky;top:0;z-index:50;flex-wrap:wrap;gap:10px;
+  }
+  .topbar-left{display:flex;align-items:center;gap:12px;}
+  .site-title{font-weight:900;font-size:20px;letter-spacing:-0.5px;color:var(--accent);}
+  .badge-admin{font-size:11px;font-weight:800;color:#fff;background:var(--accent);padding:3px 10px;border-radius:999px;}
+  .topbar-right{font-size:12px;color:var(--text-faint);}
+
+  #app{max-width:1100px;margin:0 auto;padding:24px 16px 60px;}
+
+  .mock-banner{
+    background:var(--accent-soft);color:var(--accent);border-radius:10px;padding:10px 14px;font-size:12px;font-weight:600;
+    margin-bottom:18px;text-align:center;
+  }
+
+  .admin-gate{max-width:340px;margin:60px auto;text-align:center;background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:32px 24px;box-shadow:var(--shadow);}
+  .admin-gate h2{margin:0 0 16px;font-size:18px;}
+  .admin-gate input{width:100%;padding:11px 13px;border-radius:10px;border:1px solid var(--border);background:var(--surface-2);font-size:14px;margin-bottom:12px;color:var(--text);}
+  .admin-gate button{width:100%;padding:11px;border-radius:10px;border:none;background:var(--accent);color:#fff;font-weight:800;}
+  .admin-gate .hint{font-size:11px;color:var(--text-faint);margin-top:14px;line-height:1.5;}
+
+  .admin-top{display:flex;align-items:center;justify-content:space-between;margin-bottom:18px;flex-wrap:wrap;gap:10px;}
+  .admin-tabs{display:flex;gap:6px;}
+  .admin-tab-btn{padding:9px 16px;border-radius:999px;border:1px solid var(--border);background:var(--surface);font-weight:700;font-size:13px;color:var(--text-dim);}
+  .admin-tab-btn.active{background:var(--accent);color:#fff;border-color:var(--accent);}
+  .admin-logout{font-size:12px;color:var(--text-faint);}
+  .admin-logout:hover{color:var(--danger);}
+
+  .stat-row{display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:12px;margin-bottom:18px;}
+  .stat-card{background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:14px 16px;box-shadow:var(--shadow);}
+  .stat-card .num{font-size:22px;font-weight:900;}
+  .stat-card .label{font-size:12px;color:var(--text-faint);font-weight:600;margin-top:2px;}
+
+  .admin-toolbar{display:flex;justify-content:space-between;align-items:center;margin-bottom:14px;gap:10px;flex-wrap:wrap;}
+  .add-btn{padding:10px 16px;border-radius:10px;border:none;background:var(--accent);color:#fff;font-weight:800;font-size:13px;}
+  .add-btn:hover{opacity:.9;}
+  .status-filter select{padding:8px 12px;border-radius:8px;border:1px solid var(--border);background:var(--surface-2);font-size:12px;color:var(--text);}
+
+  .data-table-wrap{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);overflow:hidden;box-shadow:var(--shadow);overflow-x:auto;}
+  table.data-table{width:100%;border-collapse:collapse;font-size:13px;min-width:560px;}
+  table.data-table th{text-align:left;padding:11px 12px;background:var(--surface-2);color:var(--text-faint);font-size:11px;font-weight:800;border-bottom:1px solid var(--border);white-space:nowrap;}
+  table.data-table td{padding:11px 12px;border-bottom:1px solid var(--border);vertical-align:middle;}
+  table.data-table tr:last-child td{border-bottom:none;}
+  table.data-table tr.clickable{cursor:pointer;}
+  table.data-table tr.clickable:hover{background:var(--surface-2);}
+  .table-cat-tag{display:inline-block;color:#fff;font-size:10px;font-weight:800;padding:3px 9px;border-radius:999px;}
+  .status-badge{font-size:10px;font-weight:800;padding:3px 9px;border-radius:999px;}
+  .status-badge.pending{background:#fff3bf;color:#997404;}
+  .status-badge.uploaded{background:#d3f9d8;color:#2b8a3e;}
+  .row-actions{display:flex;gap:6px;}
+  .row-actions button{padding:5px 10px;border-radius:7px;border:1px solid var(--border);background:var(--surface-2);font-size:11px;font-weight:700;color:var(--text-dim);}
+  .row-actions button:hover{border-color:var(--accent);color:var(--accent);}
+  .row-actions button.del:hover{border-color:var(--danger);color:var(--danger);}
+  .empty-table{padding:40px 16px;text-align:center;color:var(--text-faint);font-size:13px;}
+
+  .modal-overlay{position:fixed;inset:0;background:rgba(10,10,20,0.5);display:flex;align-items:center;justify-content:center;z-index:200;padding:16px;}
+  .modal-box{background:var(--surface);border-radius:18px;box-shadow:var(--shadow-lg);width:100%;max-width:380px;padding:24px;position:relative;max-height:88vh;overflow:auto;}
+  .modal-box.wide{max-width:520px;}
+  .modal-close{position:absolute;top:14px;right:14px;width:30px;height:30px;border-radius:50%;border:none;background:var(--surface-2);color:var(--text-dim);font-size:14px;display:flex;align-items:center;justify-content:center;}
+  .modal-close:hover{background:var(--accent-soft);color:var(--accent);}
+  .modal-tag{display:inline-block;color:#fff;font-size:12px;font-weight:800;padding:4px 12px;border-radius:999px;margin-bottom:16px;}
+  .modal-rows{display:flex;flex-direction:column;gap:12px;margin-bottom:20px;}
+  .modal-row .modal-label{font-size:11px;color:var(--text-faint);font-weight:700;margin-bottom:2px;display:block;}
+  .modal-row .modal-value{font-size:16px;font-weight:700;color:var(--text);}
+  .modal-row .modal-value.small{font-size:13px;font-weight:500;color:var(--text-dim);}
+  .modal-form-grid{display:flex;flex-direction:column;gap:14px;margin-bottom:18px;}
+  .modal-form-actions{display:flex;gap:8px;justify-content:flex-end;}
+  .btn-primary{padding:10px 18px;border-radius:10px;border:none;background:var(--accent);color:#fff;font-weight:800;font-size:13px;}
+  .btn-ghost{padding:10px 18px;border-radius:10px;border:1px solid var(--border);background:transparent;color:var(--text-dim);font-weight:700;font-size:13px;}
+  .btn-danger{padding:10px 18px;border-radius:10px;border:none;background:var(--danger);color:#fff;font-weight:800;font-size:13px;}
+  .field{margin-bottom:0;}
+  .field label{display:block;font-size:13px;font-weight:700;margin-bottom:6px;color:var(--text);}
+  .field input, .field select, .field textarea{width:100%;padding:11px 13px;border-radius:10px;border:1px solid var(--border);background:var(--surface-2);color:var(--text);font-size:14px;}
+  .field textarea{resize:vertical;min-height:70px;}
+  .field input:focus, .field select:focus, .field textarea:focus{outline:none;border-color:var(--accent);}
+
+  #toast-root{position:fixed;bottom:24px;left:50%;transform:translateX(-50%);z-index:400;display:flex;flex-direction:column;gap:8px;align-items:center;}
+  .toast{background:#1c1e28;color:#fff;padding:11px 20px;border-radius:999px;font-size:13px;font-weight:600;box-shadow:var(--shadow-lg);animation:toastin .2s ease;}
+  @keyframes toastin{from{opacity:0;transform:translateY(8px);}to{opacity:1;transform:translateY(0);}}
+</style>
+</head>
+<body>
+
+<div id="topbar">
+  <div class="topbar-left">
+    <span class="site-title">Sokury</span>
+    <span class="badge-admin">ADMIN</span>
+  </div>
+  <div class="topbar-right">관리자 전용 페이지</div>
+</div>
+
+<main id="app"></main>
+<div id="modal-root"></div>
+<div id="toast-root"></div>
+
+<script>
+/* =========================================================
+   카테고리 정의 (메인 사이트와 동일)
+========================================================= */
+const CATEGORIES = {
+  regular:     { label:'정규',      color:'var(--cat-regular)' },
+  ep:          { label:'EP',        color:'var(--cat-ep)' },
+  single:      { label:'싱글',      color:'var(--cat-single)' },
+  mixtape:     { label:'믹스테잎',  color:'var(--cat-mixtape)' },
+  compilation: { label:'컴필레이션',color:'var(--cat-compilation)' },
+  physical:    { label:'피지컬',    color:'var(--cat-physical)' },
+  concert:     { label:'콘서트',    color:'var(--cat-concert)' },
+};
+const ALL_CATS = Object.keys(CATEGORIES);
+
+/* =========================================================
+   데이터 저장소 — 메인 사이트와 동일한 로컬 저장 키를 사용하는 목업.
+   실제 서비스에서는 두 사이트가 같은 백엔드 DB를 바라보게 되며,
+   그때는 이 Store 함수들의 내부만 API 호출로 교체하면 됩니다.
+========================================================= */
+const Store = {
+  K_SCHEDULES: 'cbcal_schedules_v2',
+  K_APPLICATIONS: 'cbcal_applications_v2',
+
+  getSchedules(){ try{ return JSON.parse(localStorage.getItem(this.K_SCHEDULES)) || []; }catch(e){ return []; } },
+  saveSchedules(arr){ localStorage.setItem(this.K_SCHEDULES, JSON.stringify(arr)); },
+  addSchedule(s){ const arr=this.getSchedules(); arr.push(s); this.saveSchedules(arr); return s; },
+  updateSchedule(id, patch){ const arr=this.getSchedules(); const i=arr.findIndex(x=>x.id===id); if(i>-1){ arr[i]={...arr[i], ...patch}; this.saveSchedules(arr);} },
+  deleteSchedule(id){ this.saveSchedules(this.getSchedules().filter(x=>x.id!==id)); },
+  getSchedule(id){ return this.getSchedules().find(x=>x.id===id) || null; },
+
+  getApplications(){ try{ return JSON.parse(localStorage.getItem(this.K_APPLICATIONS)) || []; }catch(e){ return []; } },
+  saveApplications(arr){ localStorage.setItem(this.K_APPLICATIONS, JSON.stringify(arr)); },
+  updateApplication(id, patch){ const arr=this.getApplications(); const i=arr.findIndex(x=>x.id===id); if(i>-1){ arr[i]={...arr[i], ...patch}; this.saveApplications(arr);} },
+  deleteApplication(id){ this.saveApplications(this.getApplications().filter(x=>x.id!==id)); },
+  getApplication(id){ return this.getApplications().find(x=>x.id===id) || null; },
+};
+
+function uid(prefix){ return prefix+'_'+Date.now().toString(36)+Math.random().toString(36).slice(2,7); }
+function fmtDateKR(iso){ const [y,m,d] = iso.split('-').map(Number); return `${y}년 ${m}월 ${d}일`; }
+function escapeHtml(str){ return String(str||'').replace(/[&<>"']/g, c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
+function showToast(msg){
+  const root = document.getElementById('toast-root');
+  const el = document.createElement('div'); el.className='toast'; el.textContent=msg;
+  root.appendChild(el); setTimeout(()=>el.remove(), 2400);
+}
+
+/* =========================================================
+   모달
+========================================================= */
+function closeModal(){ document.getElementById('modal-root').innerHTML=''; }
+function openModal(innerHtml, opts){
+  opts = opts||{};
+  const root = document.getElementById('modal-root');
+  root.innerHTML = `
+    <div class="modal-overlay" id="modal-overlay">
+      <div class="modal-box ${opts.wide?'wide':''}">
+        <button class="modal-close" onclick="closeModal()">✕</button>
+        ${innerHtml}
+      </div>
+    </div>`;
+  document.getElementById('modal-overlay').addEventListener('mousedown', function(e){ if(e.target.id==='modal-overlay') closeModal(); });
+}
+document.addEventListener('keydown', e=>{ if(e.key==='Escape') closeModal(); });
+
+/* =========================================================
+   이 페이지는 Vercel Middleware(middleware.js)가 이미 이 경로를
+   HTTP Basic 인증으로 막아준 뒤에만 내려받아집니다. 페이지 안에서
+   다시 로그인 여부를 확인할 필요가 없습니다.
+========================================================= */
+let adminTab = 'schedules';
+let adminAppFilter = 'all';
+
+function render(){
+  const app = document.getElementById('app');
+  const schedules = Store.getSchedules();
+  const applications = Store.getApplications();
+  const pendingCount = applications.filter(a=>a.status==='pending').length;
+
+  app.innerHTML = `
+    <div class="mock-banner">⚠️ 이 관리자 페이지는 현재 브라우저 로컬 저장 방식의 목업입니다. 실제 배포 시 메인 사이트와 같은 DB를 바라보도록 연동해야 신청/일정이 서로 반영됩니다.</div>
+    <div class="stat-row">
+      <div class="stat-card"><div class="num">${schedules.length}</div><div class="label">등록된 일정</div></div>
+      <div class="stat-card"><div class="num">${applications.length}</div><div class="label">총 신청 건수</div></div>
+      <div class="stat-card"><div class="num">${pendingCount}</div><div class="label">대기중인 신청</div></div>
+    </div>
+    <div class="admin-top">
+      <div class="admin-tabs">
+        <button class="admin-tab-btn ${adminTab==='schedules'?'active':''}" onclick="setTab('schedules')">일정 관리</button>
+        <button class="admin-tab-btn ${adminTab==='applications'?'active':''}" onclick="setTab('applications')">신청 내역</button>
+      </div>
+    </div>
+    <div id="admin-body"></div>
+  `;
+  renderBody();
+}
+function setTab(t){ adminTab=t; renderBody(); }
+function renderBody(){
+  const body = document.getElementById('admin-body');
+  if(!body) return;
+  if(adminTab==='schedules') renderSchedules(body); else renderApplications(body);
+}
+
+/* =========================================================
+   일정 관리
+========================================================= */
+function renderSchedules(body){
+  const list = Store.getSchedules().slice().sort((a,b)=>a.date.localeCompare(b.date));
+  const rows = list.map(s=>{
+    const cat = CATEGORIES[s.category]||{label:s.category,color:'#888'};
+    return `<tr>
+      <td>${fmtDateKR(s.date)}</td>
+      <td>${escapeHtml(s.artist)}</td>
+      <td><span class="table-cat-tag" style="background:${cat.color}">${escapeHtml(cat.label)}</span></td>
+      <td>${escapeHtml(s.title||'-')}</td>
+      <td>❤️ ${s.likes||0}</td>
+      <td class="row-actions">
+        <button onclick="openScheduleForm('${s.id}')">수정</button>
+        <button class="del" onclick="confirmDeleteSchedule('${s.id}')">삭제</button>
+      </td>
+    </tr>`;
+  }).join('');
+  body.innerHTML = `
+    <div class="admin-toolbar">
+      <div></div>
+      <button class="add-btn" onclick="openScheduleForm()">+ 새 일정 추가</button>
+    </div>
+    <div class="data-table-wrap">
+      <table class="data-table">
+        <thead><tr><th>일자</th><th>아티스트</th><th>카테고리</th><th>제목</th><th>좋아요</th><th>관리</th></tr></thead>
+        <tbody>${rows || `<tr><td colspan="6" class="empty-table">등록된 일정이 없습니다.</td></tr>`}</tbody>
+      </table>
+    </div>`;
+}
+function openScheduleForm(id){
+  const s = id ? Store.getSchedule(id) : null;
+  openModal(`
+    <div class="modal-tag" style="background:var(--accent)">${s?'일정 수정':'새 일정 추가'}</div>
+    <div class="modal-form-grid">
+      <div class="field"><label>일자</label><input type="date" id="f-date" value="${s?s.date:''}"></div>
+      <div class="field"><label>아티스트</label><input type="text" id="f-artist" value="${s?escapeHtml(s.artist):''}" placeholder="아티스트명"></div>
+      <div class="field"><label>카테고리</label>
+        <select id="f-category">${ALL_CATS.map(k=>`<option value="${k}" ${s&&s.category===k?'selected':''}>${CATEGORIES[k].label}</option>`).join('')}</select>
+      </div>
+      <div class="field"><label>제목 (선택)</label><input type="text" id="f-title" value="${s?escapeHtml(s.title||''):''}" placeholder="앨범명 / 공연명 등"></div>
+      <div class="field"><label>비고 (선택)</label><textarea id="f-note" placeholder="추가 정보">${s?escapeHtml(s.note||''):''}</textarea></div>
+    </div>
+    <div class="modal-form-actions">
+      <button class="btn-ghost" onclick="closeModal()">취소</button>
+      <button class="btn-primary" onclick="saveScheduleForm(${s?`'${s.id}'`:'null'})">저장</button>
+    </div>
+  `, {wide:true});
+}
+function saveScheduleForm(id){
+  const date = document.getElementById('f-date').value;
+  const artist = document.getElementById('f-artist').value.trim();
+  const category = document.getElementById('f-category').value;
+  const title = document.getElementById('f-title').value.trim();
+  const note = document.getElementById('f-note').value.trim();
+  if(!date || !artist){ showToast('일자와 아티스트는 필수입니다.'); return; }
+  if(id){ Store.updateSchedule(id, {date, artist, category, title, note}); showToast('일정이 수정되었습니다.'); }
+  else{ Store.addSchedule({ id: uid('s'), date, artist, category, title, note, likes:0, createdAt: Date.now() }); showToast('일정이 추가되었습니다.'); }
+  closeModal(); renderBody();
+}
+function confirmDeleteSchedule(id){
+  openModal(`
+    <div class="modal-tag" style="background:var(--danger)">일정 삭제</div>
+    <div class="modal-rows"><div class="modal-row"><span class="modal-value small">이 일정을 삭제하시겠습니까? 되돌릴 수 없습니다.</span></div></div>
+    <div class="modal-form-actions">
+      <button class="btn-ghost" onclick="closeModal()">취소</button>
+      <button class="btn-danger" onclick="Store.deleteSchedule('${id}'); closeModal(); renderBody(); showToast('삭제되었습니다.');">삭제</button>
+    </div>`);
+}
+
+/* =========================================================
+   신청 내역
+========================================================= */
+function renderApplications(body){
+  let list = Store.getApplications().slice().sort((a,b)=>b.createdAt-a.createdAt);
+  if(adminAppFilter !== 'all') list = list.filter(a=>a.status===adminAppFilter);
+  const rows = list.map(a=>{
+    const cat = CATEGORIES[a.category]||{label:a.category,color:'#888'};
+    return `<tr class="clickable" onclick="openApplicationModal('${a.id}')">
+      <td><span class="status-badge ${a.status}">${a.status==='pending'?'대기':'완료'}</span></td>
+      <td>${fmtDateKR(a.date)}</td>
+      <td>${escapeHtml(a.artist)}</td>
+      <td><span class="table-cat-tag" style="background:${cat.color}">${escapeHtml(cat.label)}</span></td>
+      <td>${escapeHtml(a.name)}</td>
+      <td class="row-actions" onclick="event.stopPropagation()"><button class="del" onclick="confirmDeleteApplication('${a.id}')">삭제</button></td>
+    </tr>`;
+  }).join('');
+  body.innerHTML = `
+    <div class="admin-toolbar">
+      <div class="status-filter">
+        <select onchange="adminAppFilter=this.value; renderBody();">
+          <option value="all" ${adminAppFilter==='all'?'selected':''}>전체</option>
+          <option value="pending" ${adminAppFilter==='pending'?'selected':''}>대기</option>
+          <option value="uploaded" ${adminAppFilter==='uploaded'?'selected':''}>완료</option>
+        </select>
+      </div>
+      <div></div>
+    </div>
+    <div class="data-table-wrap">
+      <table class="data-table">
+        <thead><tr><th>상태</th><th>일자</th><th>아티스트</th><th>카테고리</th><th>신청자</th><th>관리</th></tr></thead>
+        <tbody>${rows || `<tr><td colspan="6" class="empty-table">신청 내역이 없습니다.</td></tr>`}</tbody>
+      </table>
+    </div>`;
+}
+function openApplicationModal(id){
+  const a = Store.getApplication(id);
+  if(!a) return;
+  const cat = CATEGORIES[a.category]||{label:a.category,color:'#888'};
+  openModal(`
+    <div class="modal-tag" style="background:${cat.color}">${a.status==='pending'?'대기중 신청':'업로드 완료'}</div>
+    <div class="modal-rows">
+      <div class="modal-row"><span class="modal-label">일자</span><span class="modal-value">${fmtDateKR(a.date)}</span></div>
+      <div class="modal-row"><span class="modal-label">아티스트</span><span class="modal-value">${escapeHtml(a.artist)}</span></div>
+      <div class="modal-row"><span class="modal-label">카테고리</span><span class="modal-value">${escapeHtml(cat.label)}</span></div>
+      <div class="modal-row"><span class="modal-label">신청자</span><span class="modal-value">${escapeHtml(a.name)}</span></div>
+      ${a.note?`<div class="modal-row"><span class="modal-label">비고</span><span class="modal-value small">${escapeHtml(a.note)}</span></div>`:''}
+    </div>
+    <div class="modal-form-actions">
+      <button class="btn-ghost" onclick="closeModal()">닫기</button>
+      <button class="btn-primary" onclick="openUploadFromApplication('${a.id}')">업로드</button>
+    </div>`);
+}
+function openUploadFromApplication(appId){
+  const a = Store.getApplication(appId);
+  if(!a) return;
+  openModal(`
+    <div class="modal-tag" style="background:var(--accent)">일정으로 업로드</div>
+    <div class="modal-form-grid">
+      <div class="field"><label>일자</label><input type="date" id="f-date" value="${a.date}"></div>
+      <div class="field"><label>아티스트</label><input type="text" id="f-artist" value="${escapeHtml(a.artist)}"></div>
+      <div class="field"><label>카테고리</label>
+        <select id="f-category">${ALL_CATS.map(k=>`<option value="${k}" ${a.category===k?'selected':''}>${CATEGORIES[k].label}</option>`).join('')}</select>
+      </div>
+      <div class="field"><label>제목 (선택)</label><input type="text" id="f-title" placeholder="앨범명 / 공연명 등"></div>
+      <div class="field"><label>비고 (선택)</label><textarea id="f-note">${escapeHtml(a.note||'')}</textarea></div>
+    </div>
+    <div class="modal-form-actions">
+      <button class="btn-ghost" onclick="closeModal()">취소</button>
+      <button class="btn-primary" onclick="confirmUploadApplication('${appId}')">캘린더에 업로드</button>
+    </div>
+  `, {wide:true});
+}
+function confirmUploadApplication(appId){
+  const date = document.getElementById('f-date').value;
+  const artist = document.getElementById('f-artist').value.trim();
+  const category = document.getElementById('f-category').value;
+  const title = document.getElementById('f-title').value.trim();
+  const note = document.getElementById('f-note').value.trim();
+  if(!date || !artist){ showToast('일자와 아티스트는 필수입니다.'); return; }
+  Store.addSchedule({ id: uid('s'), date, artist, category, title, note, likes:0, createdAt: Date.now() });
+  Store.updateApplication(appId, {status:'uploaded'});
+  showToast('캘린더에 업로드되었습니다.');
+  closeModal(); renderBody();
+}
+function confirmDeleteApplication(id){
+  openModal(`
+    <div class="modal-tag" style="background:var(--danger)">신청 삭제</div>
+    <div class="modal-rows"><div class="modal-row"><span class="modal-value small">이 신청 내역을 삭제하시겠습니까?</span></div></div>
+    <div class="modal-form-actions">
+      <button class="btn-ghost" onclick="closeModal()">취소</button>
+      <button class="btn-danger" onclick="Store.deleteApplication('${id}'); closeModal(); renderBody(); showToast('삭제되었습니다.');">삭제</button>
+    </div>`);
+}
+
+window.addEventListener('DOMContentLoaded', render);
+</script>
+</body>
+</html>
