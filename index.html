@@ -404,6 +404,20 @@ function daysUntil(iso){
   const now = new Date(); now.setHours(0,0,0,0);
   return Math.round((target-now)/86400000);
 }
+function eachDateInRange(start, end){
+  const [sy,sm,sd] = start.split('-').map(Number);
+  const [ey,em,ed] = end.split('-').map(Number);
+  let cur = new Date(sy, sm-1, sd);
+  const last = new Date(ey, em-1, ed);
+  const dates = [];
+  let guard = 0;
+  while(cur <= last && guard < 366){ // 안전장치: 최대 366일
+    dates.push(fmtDateISO(cur));
+    cur = new Date(cur.getFullYear(), cur.getMonth(), cur.getDate()+1);
+    guard++;
+  }
+  return dates;
+}
 function escapeHtml(str){
   return String(str||'').replace(/[&<>"']/g, c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 }
@@ -446,7 +460,7 @@ function openScheduleModal(id){
   openModal(`
     <div class="modal-tag" style="background:${cat.color}">${escapeHtml(cat.label)}</div>
     <div class="modal-rows">
-      <div class="modal-row"><span class="modal-label">일정</span><span class="modal-value">${fmtDateKR(s.date)}</span></div>
+      <div class="modal-row"><span class="modal-label">일정</span><span class="modal-value">${fmtDateRangeKR(s.startDate, s.endDate)}</span></div>
       <div class="modal-row"><span class="modal-label">아티스트</span><span class="modal-value">${escapeHtml(s.artist)}</span></div>
       <div class="modal-row"><span class="modal-label">항목</span><span class="modal-value">${escapeHtml(cat.label)}${s.title?' · '+escapeHtml(s.title):''}</span></div>
       ${s.note?`<div class="modal-row"><span class="modal-label">비고</span><span class="modal-value small">${escapeHtml(s.note)}</span></div>`:''}
@@ -479,7 +493,7 @@ function openShareModal(id){
     <div class="share-card">
       <div class="tag" style="background:${cat.color}">${escapeHtml(cat.label)}</div>
       <div class="artist">${escapeHtml(s.artist)}</div>
-      <div class="date">${fmtDateKR(s.date)}${s.title?' · '+escapeHtml(s.title):''}</div>
+      <div class="date">${fmtDateRangeKR(s.startDate, s.endDate)}${s.title?' · '+escapeHtml(s.title):''}</div>
       <div class="likes">❤️ ${s.likes||0}</div>
     </div>
     <div class="share-input-row">
@@ -567,7 +581,11 @@ function renderMainPage(app){
   const schedules = Store.getSchedules();
   const cells = buildCalendarCells(calState.year, calState.month);
   const byDate = {};
-  schedules.forEach(s=>{ (byDate[s.date] = byDate[s.date]||[]).push(s); });
+  schedules.forEach(s=>{
+    eachDateInRange(s.startDate, s.endDate).forEach(iso=>{
+      (byDate[iso] = byDate[iso]||[]).push(s);
+    });
+  });
 
   const weekdayNames = ['일','월','화','수','목','금','토'];
   const legendHtml = ALL_CATS.map(k=>`
@@ -643,9 +661,10 @@ function getTopLikedList(){
   return list.slice().sort((a,b)=> (b.likes||0)-(a.likes||0)).slice(0,6);
 }
 function getUpcomingList(){
-  let list = Store.getSchedules().filter(s=> daysUntil(s.date) >= 0);
+  // 아직 끝나지 않은 일정(진행 중 포함)만, 시작일이 빠른 순으로
+  let list = Store.getSchedules().filter(s=> daysUntil(s.endDate) >= 0);
   if(panelState.right !== 'all') list = list.filter(s=>s.category===panelState.right);
-  return list.slice().sort((a,b)=> a.date.localeCompare(b.date)).slice(0,6);
+  return list.slice().sort((a,b)=> a.startDate.localeCompare(b.startDate)).slice(0,6);
 }
 function renderPanel(elId, list){
   const el = document.getElementById(elId);
@@ -653,11 +672,19 @@ function renderPanel(elId, list){
   if(list.length===0){ el.innerHTML = `<div class="empty-note">표시할 일정이 없습니다.</div>`; return; }
   el.innerHTML = list.map((s,i)=>{
     const cat = CATEGORIES[s.category]||{label:s.category,color:'#888'};
-    const metric = elId==='panel-left' ? `❤️ ${s.likes||0}` : (daysUntil(s.date)===0?'D-DAY':'D-'+daysUntil(s.date));
+    let metric;
+    if(elId==='panel-left'){
+      metric = `❤️ ${s.likes||0}`;
+    } else {
+      const dLeft = daysUntil(s.startDate);
+      if(dLeft > 0) metric = 'D-'+dLeft;
+      else if(daysUntil(s.endDate) >= 0) metric = '진행중';
+      else metric = 'D-DAY';
+    }
     return `<li class="panel-item" onclick="openScheduleModal('${s.id}')">
       <span class="rank">${i+1}</span>
       <span class="tag" style="background:${cat.color}">${escapeHtml(cat.label)}</span>
-      <div class="info"><div class="artist">${escapeHtml(s.artist)}</div><div class="date">${fmtDateKR(s.date)}</div></div>
+      <div class="info"><div class="artist">${escapeHtml(s.artist)}</div><div class="date">${fmtDateRangeKR(s.startDate, s.endDate)}</div></div>
       <span class="metric">${metric}</span>
     </li>`;
   }).join('');
@@ -811,11 +838,11 @@ function renderAdminBody(){
 }
 
 function renderAdminSchedules(body){
-  const list = Store.getSchedules().slice().sort((a,b)=>a.date.localeCompare(b.date));
+  const list = Store.getSchedules().slice().sort((a,b)=>a.startDate.localeCompare(b.startDate));
   const rows = list.map(s=>{
     const cat = CATEGORIES[s.category]||{label:s.category,color:'#888'};
     return `<tr>
-      <td>${fmtDateKR(s.date)}</td>
+      <td>${fmtDateRangeKR(s.startDate, s.endDate)}</td>
       <td>${escapeHtml(s.artist)}</td>
       <td><span class="table-cat-tag" style="background:${cat.color}">${escapeHtml(cat.label)}</span></td>
       <td>${escapeHtml(s.title||'-')}</td>
@@ -833,11 +860,35 @@ function renderAdminSchedules(body){
     </div>
     <div class="data-table-wrap">
       <table class="data-table">
-        <thead><tr><th>일자</th><th>아티스트</th><th>카테고리</th><th>제목</th><th>좋아요</th><th>관리</th></tr></thead>
+        <thead><tr><th>기간</th><th>아티스트</th><th>카테고리</th><th>제목</th><th>좋아요</th><th>관리</th></tr></thead>
         <tbody>${rows || `<tr><td colspan="6" class="empty-table">등록된 일정이 없습니다.</td></tr>`}</tbody>
       </table>
     </div>
   `;
+}
+
+function dateRangeFieldsHtml(startDate, endDate){
+  const [sy,sm,sd] = startDate ? startDate.split('-') : ['','',''];
+  const [ey,em,ed] = endDate ? endDate.split('-') : ['','',''];
+  return `
+    <div class="field">
+      <label>시작일</label>
+      <div class="date-group">
+        <input class="y" type="text" inputmode="numeric" maxlength="4" placeholder="YYYY" id="start-y" value="${sy}" autocomplete="off">
+        <input class="m" type="text" inputmode="numeric" maxlength="2" placeholder="MM" id="start-m" value="${sm}" autocomplete="off">
+        <input class="d" type="text" inputmode="numeric" maxlength="2" placeholder="DD" id="start-d" value="${sd}" autocomplete="off">
+      </div>
+      <div class="date-group-label"><span>년</span><span>월</span><span>일</span></div>
+    </div>
+    <div class="field">
+      <label>종료일</label>
+      <div class="date-group">
+        <input class="y" type="text" inputmode="numeric" maxlength="4" placeholder="YYYY" id="end-y" value="${ey}" autocomplete="off">
+        <input class="m" type="text" inputmode="numeric" maxlength="2" placeholder="MM" id="end-m" value="${em}" autocomplete="off">
+        <input class="d" type="text" inputmode="numeric" maxlength="2" placeholder="DD" id="end-d" value="${ed}" autocomplete="off">
+      </div>
+      <div class="date-group-label"><span>년</span><span>월</span><span>일</span></div>
+    </div>`;
 }
 
 function openScheduleFormModal(id){
@@ -845,7 +896,7 @@ function openScheduleFormModal(id){
   openModal(`
     <div class="modal-tag" style="background:var(--accent)">${s?'일정 수정':'새 일정 추가'}</div>
     <div class="modal-form-grid">
-      <div class="field"><label>일자</label><input type="date" id="f-date" value="${s?s.date:''}"></div>
+      ${dateRangeFieldsHtml(s?s.startDate:'', s?s.endDate:'')}
       <div class="field"><label>아티스트</label><input type="text" id="f-artist" value="${s?escapeHtml(s.artist):''}" placeholder="아티스트명"></div>
       <div class="field"><label>카테고리</label>
         <select id="f-category">
@@ -860,19 +911,24 @@ function openScheduleFormModal(id){
       <button class="btn-primary" onclick="saveScheduleForm(${s?`'${s.id}'`:'null'})">저장</button>
     </div>
   `, {wide:true});
+  setupDateRangeInputs();
 }
 function saveScheduleForm(id){
-  const date = document.getElementById('f-date').value;
+  const startDate = readDateGroup('start');
+  const endDate = readDateGroup('end');
   const artist = document.getElementById('f-artist').value.trim();
   const category = document.getElementById('f-category').value;
   const title = document.getElementById('f-title').value.trim();
   const note = document.getElementById('f-note').value.trim();
-  if(!date || !artist){ showToast('일자와 아티스트는 필수입니다.'); return; }
+  if(!startDate){ showToast('시작일을 올바르게 입력해주세요.'); return; }
+  if(!endDate){ showToast('종료일을 올바르게 입력해주세요.'); return; }
+  if(!artist){ showToast('아티스트는 필수입니다.'); return; }
+  if(endDate < startDate){ showToast('종료일이 시작일보다 빠를 수 없습니다.'); return; }
   if(id){
-    Store.updateSchedule(id, {date, artist, category, title, note});
+    Store.updateSchedule(id, {startDate, endDate, artist, category, title, note});
     showToast('일정이 수정되었습니다.');
   } else {
-    Store.addSchedule({ id: uid('s'), date, artist, category, title, note, likes:0, createdAt: Date.now() });
+    Store.addSchedule({ id: uid('s'), startDate, endDate, artist, category, title, note, likes:0, createdAt: Date.now() });
     showToast('일정이 추가되었습니다.');
   }
   closeModal();
@@ -946,15 +1002,10 @@ function openApplicationModal(id){
 function openUploadFromApplication(appId){
   const a = Store.getApplication(appId);
   if(!a) return;
-  const isRange = a.endDate && a.endDate !== a.startDate;
-  const prefilledNote = isRange
-    ? (a.note ? a.note + `\n(신청 기간: ${fmtDateRangeKR(a.startDate, a.endDate)})` : `신청 기간: ${fmtDateRangeKR(a.startDate, a.endDate)}`)
-    : (a.note || '');
   openModal(`
     <div class="modal-tag" style="background:var(--accent)">일정으로 업로드</div>
-    ${isRange ? `<div class="hint" style="margin-bottom:12px;">신청 기간이 여러 날(${fmtDateRangeKR(a.startDate, a.endDate)})이지만, 캘린더 일정은 하루 단위라 우선 시작일로 채워뒀습니다. 필요하면 날짜를 바꾸거나, 업로드 후 다른 날짜로 일정을 추가로 만들어주세요.</div>` : ''}
     <div class="modal-form-grid">
-      <div class="field"><label>일자</label><input type="date" id="f-date" value="${a.startDate}"></div>
+      ${dateRangeFieldsHtml(a.startDate, a.endDate)}
       <div class="field"><label>아티스트</label><input type="text" id="f-artist" value="${escapeHtml(a.artist)}"></div>
       <div class="field"><label>카테고리</label>
         <select id="f-category">
@@ -962,22 +1013,27 @@ function openUploadFromApplication(appId){
         </select>
       </div>
       <div class="field"><label>제목 (선택)</label><input type="text" id="f-title" placeholder="앨범명 / 공연명 등"></div>
-      <div class="field"><label>비고 (선택)</label><textarea id="f-note">${escapeHtml(prefilledNote)}</textarea></div>
+      <div class="field"><label>비고 (선택)</label><textarea id="f-note">${escapeHtml(a.note||'')}</textarea></div>
     </div>
     <div class="modal-form-actions">
       <button class="btn-ghost" onclick="closeModal()">취소</button>
       <button class="btn-primary" onclick="confirmUploadApplication('${appId}')">캘린더에 업로드</button>
     </div>
   `, {wide:true});
+  setupDateRangeInputs();
 }
 function confirmUploadApplication(appId){
-  const date = document.getElementById('f-date').value;
+  const startDate = readDateGroup('start');
+  const endDate = readDateGroup('end');
   const artist = document.getElementById('f-artist').value.trim();
   const category = document.getElementById('f-category').value;
   const title = document.getElementById('f-title').value.trim();
   const note = document.getElementById('f-note').value.trim();
-  if(!date || !artist){ showToast('일자와 아티스트는 필수입니다.'); return; }
-  Store.addSchedule({ id: uid('s'), date, artist, category, title, note, likes:0, createdAt: Date.now() });
+  if(!startDate){ showToast('시작일을 올바르게 입력해주세요.'); return; }
+  if(!endDate){ showToast('종료일을 올바르게 입력해주세요.'); return; }
+  if(!artist){ showToast('아티스트는 필수입니다.'); return; }
+  if(endDate < startDate){ showToast('종료일이 시작일보다 빠를 수 없습니다.'); return; }
+  Store.addSchedule({ id: uid('s'), startDate, endDate, artist, category, title, note, likes:0, createdAt: Date.now() });
   Store.updateApplication(appId, {status:'uploaded'});
   showToast('캘린더에 업로드되었습니다.');
   closeModal();
