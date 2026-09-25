@@ -218,6 +218,18 @@
     background:var(--surface-2);color:var(--text);font-size:14px;
   }
   .field textarea{resize:vertical;min-height:70px;}
+  .date-group{display:flex;gap:8px;}
+  .date-group input{
+    width:100%;padding:11px 10px;border-radius:10px;border:1px solid var(--border);
+    background:var(--surface-2);color:var(--text);font-size:14px;text-align:center;
+  }
+  .date-group input:focus{outline:none;border-color:var(--accent);}
+  .date-group .y{flex:1.4;}
+  .date-group .m{flex:1;}
+  .date-group .d{flex:1;}
+  .date-group-label{font-size:11px;color:var(--text-faint);margin-top:4px;display:flex;gap:8px;}
+  .date-group-label span{flex:1.4;text-align:center;}
+  .date-group-label span:nth-child(2), .date-group-label span:nth-child(3){flex:1;}
   .field input:focus, .field select:focus, .field textarea:focus{outline:none;border-color:var(--accent);}
   .submit-btn{
     width:100%;padding:13px;border-radius:10px;border:none;background:var(--accent);color:#fff;
@@ -380,6 +392,10 @@ function fmtDateISO(dt){ return dt.getFullYear()+'-'+String(dt.getMonth()+1).pad
 function fmtDateKR(iso){
   const [y,m,d] = iso.split('-').map(Number);
   return `${y}년 ${m}월 ${d}일`;
+}
+function fmtDateRangeKR(start, end){
+  if(!end || start===end) return fmtDateKR(start);
+  return `${fmtDateKR(start)} ~ ${fmtDateKR(end)}`;
 }
 function todayISO(){ return fmtDateISO(new Date()); }
 function daysUntil(iso){
@@ -666,7 +682,24 @@ function renderApplyPage(app){
     <div class="form-card">
       <h2>일정 신청</h2>
       <form id="apply-form">
-        <div class="field"><label>일자</label><input type="date" name="date" required></div>
+        <div class="field">
+          <label>시작일</label>
+          <div class="date-group">
+            <input class="y" type="text" inputmode="numeric" maxlength="4" placeholder="YYYY" id="start-y" autocomplete="off">
+            <input class="m" type="text" inputmode="numeric" maxlength="2" placeholder="MM" id="start-m" autocomplete="off">
+            <input class="d" type="text" inputmode="numeric" maxlength="2" placeholder="DD" id="start-d" autocomplete="off">
+          </div>
+          <div class="date-group-label"><span>년</span><span>월</span><span>일</span></div>
+        </div>
+        <div class="field">
+          <label>종료일</label>
+          <div class="date-group">
+            <input class="y" type="text" inputmode="numeric" maxlength="4" placeholder="YYYY" id="end-y" autocomplete="off">
+            <input class="m" type="text" inputmode="numeric" maxlength="2" placeholder="MM" id="end-m" autocomplete="off">
+            <input class="d" type="text" inputmode="numeric" maxlength="2" placeholder="DD" id="end-d" autocomplete="off">
+          </div>
+          <div class="date-group-label"><span>년</span><span>월</span><span>일</span></div>
+        </div>
         <div class="field"><label>아티스트</label><input type="text" name="artist" required></div>
         <div class="field"><label>카테고리</label>
           <select name="category" required>
@@ -679,12 +712,18 @@ function renderApplyPage(app){
       </form>
     </div>
   `;
-  document.getElementById('apply-form').addEventListener('submit', function(e){
+  setupDateRangeInputs();
+  document.getElementById('apply-form').addEventListener('submit', async function(e){
     e.preventDefault();
     const fd = new FormData(e.target);
+    const startDate = readDateGroup('start');
+    const endDate = readDateGroup('end');
+    if(!startDate){ showToast('시작일을 올바르게 입력해주세요.'); return; }
+    if(!endDate){ showToast('종료일을 올바르게 입력해주세요.'); return; }
+    if(endDate < startDate){ showToast('종료일이 시작일보다 빠를 수 없습니다.'); return; }
     const application = {
       id: uid('a'),
-      date: fd.get('date'),
+      startDate, endDate,
       artist: fd.get('artist').trim(),
       category: fd.get('category'),
       name: fd.get('name').trim(),
@@ -695,7 +734,48 @@ function renderApplyPage(app){
     Store.addApplication(application);
     showToast('신청이 접수되었습니다. 감사합니다!');
     e.target.reset();
+    setupDateRangeInputs();
   });
+}
+
+/* ---- 년/월/일 개별 입력 필드 ---- */
+function clampDigits(el, maxLen, maxVal){
+  el.addEventListener('input', ()=>{
+    let v = el.value.replace(/[^0-9]/g,'').slice(0, maxLen);
+    if(v.length === maxLen && maxVal){
+      const n = parseInt(v, 10);
+      if(n > maxVal) v = String(maxVal);
+      if(n === 0) v = '01'.slice(0, maxLen);
+    }
+    el.value = v;
+  });
+  // 자동으로 다음 칸으로 넘어가는 동작은 넣지 않습니다 (요청에 따라 제거).
+}
+function setupDateRangeInputs(){
+  const sy=document.getElementById('start-y'), sm=document.getElementById('start-m'), sd=document.getElementById('start-d');
+  const ey=document.getElementById('end-y'), em=document.getElementById('end-m'), ed=document.getElementById('end-d');
+  if(!sy) return;
+  clampDigits(sy, 4, null);
+  clampDigits(sm, 2, 12);
+  clampDigits(sd, 2, 31);
+  clampDigits(ey, 4, null);
+  clampDigits(em, 2, 12);
+  clampDigits(ed, 2, 31);
+  // 시작일을 입력하면 종료일을 같은 날짜로 자동 설정합니다 (종료일은 이후 직접 수정 가능).
+  [sy, sm, sd].forEach(el=>{
+    el.addEventListener('input', ()=>{
+      ey.value = sy.value; em.value = sm.value; ed.value = sd.value;
+    });
+  });
+}
+function readDateGroup(prefix){
+  const y = document.getElementById(prefix+'-y').value;
+  const m = document.getElementById(prefix+'-m').value;
+  const d = document.getElementById(prefix+'-d').value;
+  if(y.length!==4 || !m || !d) return null;
+  const mm = String(Math.min(12, Math.max(1, parseInt(m,10)||1))).padStart(2,'0');
+  const dd = String(Math.min(31, Math.max(1, parseInt(d,10)||1))).padStart(2,'0');
+  return `${y}-${mm}-${dd}`;
 }
 
 /* =========================================================
@@ -816,7 +896,7 @@ function renderAdminApplications(body){
     const cat = CATEGORIES[a.category]||{label:a.category,color:'#888'};
     return `<tr class="clickable" onclick="openApplicationModal('${a.id}')">
       <td><span class="status-badge ${a.status}">${a.status==='pending'?'대기':'완료'}</span></td>
-      <td>${fmtDateKR(a.date)}</td>
+      <td>${fmtDateRangeKR(a.startDate, a.endDate)}</td>
       <td>${escapeHtml(a.artist)}</td>
       <td><span class="table-cat-tag" style="background:${cat.color}">${escapeHtml(cat.label)}</span></td>
       <td>${escapeHtml(a.name)}</td>
@@ -851,7 +931,7 @@ function openApplicationModal(id){
   openModal(`
     <div class="modal-tag" style="background:${cat.color}">${a.status==='pending'?'대기중 신청':'업로드 완료'}</div>
     <div class="modal-rows">
-      <div class="modal-row"><span class="modal-label">일자</span><span class="modal-value">${fmtDateKR(a.date)}</span></div>
+      <div class="modal-row"><span class="modal-label">기간</span><span class="modal-value">${fmtDateRangeKR(a.startDate, a.endDate)}</span></div>
       <div class="modal-row"><span class="modal-label">아티스트</span><span class="modal-value">${escapeHtml(a.artist)}</span></div>
       <div class="modal-row"><span class="modal-label">카테고리</span><span class="modal-value">${escapeHtml(cat.label)}</span></div>
       <div class="modal-row"><span class="modal-label">신청자</span><span class="modal-value">${escapeHtml(a.name)}</span></div>
@@ -866,10 +946,15 @@ function openApplicationModal(id){
 function openUploadFromApplication(appId){
   const a = Store.getApplication(appId);
   if(!a) return;
+  const isRange = a.endDate && a.endDate !== a.startDate;
+  const prefilledNote = isRange
+    ? (a.note ? a.note + `\n(신청 기간: ${fmtDateRangeKR(a.startDate, a.endDate)})` : `신청 기간: ${fmtDateRangeKR(a.startDate, a.endDate)}`)
+    : (a.note || '');
   openModal(`
     <div class="modal-tag" style="background:var(--accent)">일정으로 업로드</div>
+    ${isRange ? `<div class="hint" style="margin-bottom:12px;">신청 기간이 여러 날(${fmtDateRangeKR(a.startDate, a.endDate)})이지만, 캘린더 일정은 하루 단위라 우선 시작일로 채워뒀습니다. 필요하면 날짜를 바꾸거나, 업로드 후 다른 날짜로 일정을 추가로 만들어주세요.</div>` : ''}
     <div class="modal-form-grid">
-      <div class="field"><label>일자</label><input type="date" id="f-date" value="${a.date}"></div>
+      <div class="field"><label>일자</label><input type="date" id="f-date" value="${a.startDate}"></div>
       <div class="field"><label>아티스트</label><input type="text" id="f-artist" value="${escapeHtml(a.artist)}"></div>
       <div class="field"><label>카테고리</label>
         <select id="f-category">
@@ -877,7 +962,7 @@ function openUploadFromApplication(appId){
         </select>
       </div>
       <div class="field"><label>제목 (선택)</label><input type="text" id="f-title" placeholder="앨범명 / 공연명 등"></div>
-      <div class="field"><label>비고 (선택)</label><textarea id="f-note">${escapeHtml(a.note||'')}</textarea></div>
+      <div class="field"><label>비고 (선택)</label><textarea id="f-note">${escapeHtml(prefilledNote)}</textarea></div>
     </div>
     <div class="modal-form-actions">
       <button class="btn-ghost" onclick="closeModal()">취소</button>
