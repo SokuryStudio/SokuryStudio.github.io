@@ -1,11 +1,29 @@
 // middleware.js — Vercel Edge Middleware
 //
-// /admin 경로만 HTTP Basic 인증으로 막습니다. 그 외 경로(메인 사이트, 신청 페이지)는
-// 그대로 통과합니다. 비밀번호는 ADMIN_USER / ADMIN_PASSWORD 환경변수로만 읽고,
-// 이 파일 어디에도 실제 값을 적지 않습니다 — Vercel 대시보드에서 직접 넣으세요.
+// 아래 경로들만 HTTP Basic 인증으로 막습니다. 그 외(메인 사이트, 신청서 제출,
+// 일정 조회, 좋아요)는 그대로 통과합니다. 비밀번호는 ADMIN_USER / ADMIN_PASSWORD
+// 환경변수로만 읽고, 이 파일 어디에도 실제 값을 적지 않습니다.
+//
+// 인증이 필요한 것:
+//   - /admin, /admin/*                         (관리자 페이지 자체)
+//   - POST   /api/schedules                     (일정 생성)
+//   - PUT/DELETE /api/schedules/:id              (일정 수정/삭제)
+//   - GET    /api/applications                   (신청 목록 조회 — 개인정보 포함)
+//   - PATCH/DELETE /api/applications/:id          (신청 처리/삭제)
+// 인증이 필요 없는 것(공개):
+//   - GET  /api/schedules                        (일정 조회)
+//   - POST /api/schedules/:id/like                (좋아요)
+//   - POST /api/applications                      (신청서 제출)
 
 export const config = {
-  matcher: ['/admin', '/admin/:path*'],
+  matcher: [
+    '/admin',
+    '/admin/:path*',
+    '/api/schedules',
+    '/api/schedules/:path*',
+    '/api/applications',
+    '/api/applications/:path*',
+  ],
 };
 
 const REALM = 'Admin Area';
@@ -48,7 +66,38 @@ function base64Decode(base64) {
   }
 }
 
+// /api/schedules 계열 중 관리자 인증이 필요한 조합만 true.
+// (schedules 자체는 POST만 관리자, :id는 PUT/DELETE만 관리자, :id/like는 항상 공개)
+function scheduleNeedsAuth(segments, method) {
+  if (segments.length === 2) return method === 'POST'; // /api/schedules
+  if (segments.length === 3) return method === 'PUT' || method === 'DELETE'; // /api/schedules/:id
+  if (segments.length === 4 && segments[3] === 'like') return false; // /api/schedules/:id/like
+  return true; // 알 수 없는 하위 경로는 안전하게 막음
+}
+// /api/applications 계열: 목록 조회(GET)와 처리(PATCH/DELETE)만 관리자, 제출(POST)은 공개.
+function applicationNeedsAuth(segments, method) {
+  if (segments.length === 2) return method === 'GET'; // /api/applications
+  if (segments.length === 3) return method === 'PATCH' || method === 'DELETE'; // /api/applications/:id
+  return true;
+}
+
+function pathNeedsAuth(pathname, method) {
+  if (pathname === '/admin' || pathname.startsWith('/admin/')) return true;
+  const segments = pathname.split('/').filter(Boolean); // 예: ['api','schedules','abc','like']
+  if (segments[0] !== 'api') return false;
+  if (segments[1] === 'schedules') return scheduleNeedsAuth(segments, method);
+  if (segments[1] === 'applications') return applicationNeedsAuth(segments, method);
+  return false;
+}
+
 export default async function middleware(request) {
+  const { pathname } = new URL(request.url);
+  const method = request.method.toUpperCase();
+
+  if (!pathNeedsAuth(pathname, method)) {
+    return; // 인증 불필요 — 그대로 통과
+  }
+
   const adminUser = process.env.ADMIN_USER;
   const adminPassword = process.env.ADMIN_PASSWORD;
 
@@ -93,5 +142,5 @@ export default async function middleware(request) {
     return unauthorized();
   }
 
-  // 통과 — 이후 정적 파일(/admin/index.html)이 그대로 내려갑니다.
+  // 통과 — 이후 정적 파일(/admin/index.html) 또는 API 함수가 그대로 실행됩니다.
 }

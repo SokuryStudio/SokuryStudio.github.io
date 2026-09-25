@@ -82,8 +82,6 @@
   #app{max-width:1100px;margin:0 auto;padding:24px 16px 60px;}
 
   footer{max-width:1100px;margin:0 auto;padding:10px 20px 40px;text-align:right;}
-  .admin-link{font-size:12px;color:var(--text-faint);opacity:.6;}
-  .admin-link:hover{opacity:1;color:var(--accent);}
 
   /* ---- calendar header ---- */
   .cal-header{display:flex;align-items:center;justify-content:center;gap:16px;margin-bottom:16px;}
@@ -245,23 +243,6 @@
   }
   @keyframes toastin{from{opacity:0;transform:translateY(8px);}to{opacity:1;transform:translateY(0);}}
 
-  /* ---- admin ---- */
-  .admin-gate{max-width:340px;margin:60px auto;text-align:center;background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:32px 24px;box-shadow:var(--shadow);}
-  .admin-gate h2{margin:0 0 16px;font-size:18px;}
-  .admin-gate input{width:100%;padding:11px 13px;border-radius:10px;border:1px solid var(--border);background:var(--surface-2);font-size:14px;margin-bottom:12px;color:var(--text);}
-  .admin-gate button{width:100%;padding:11px;border-radius:10px;border:none;background:var(--accent);color:#fff;font-weight:800;}
-  .admin-gate .hint{font-size:11px;color:var(--text-faint);margin-top:14px;line-height:1.5;}
-
-  .admin-top{display:flex;align-items:center;justify-content:space-between;margin-bottom:18px;flex-wrap:wrap;gap:10px;}
-  .admin-tabs{display:flex;gap:6px;}
-  .admin-tab-btn{
-    padding:9px 16px;border-radius:999px;border:1px solid var(--border);background:var(--surface);
-    font-weight:700;font-size:13px;color:var(--text-dim);
-  }
-  .admin-tab-btn.active{background:var(--accent);color:#fff;border-color:var(--accent);}
-  .admin-logout{font-size:12px;color:var(--text-faint);}
-  .admin-logout:hover{color:var(--danger);}
-
   .admin-toolbar{display:flex;justify-content:space-between;align-items:center;margin-bottom:14px;gap:10px;flex-wrap:wrap;}
   .add-btn{padding:10px 16px;border-radius:10px;border:none;background:var(--accent);color:#fff;font-weight:800;font-size:13px;}
   .add-btn:hover{opacity:.9;}
@@ -318,7 +299,6 @@
 
 <main id="app"></main>
 
-<footer><a href="#/admin" class="admin-link">관리자</a></footer>
 
 <div id="modal-root"></div>
 <div id="toast-root"></div>
@@ -341,49 +321,52 @@ const BOTTOM_CATS = ['physical','concert'];
 const ALL_CATS = [...TOP_CATS, ...BOTTOM_CATS];
 
 /* =========================================================
-   데이터 저장소 (현재는 브라우저 로컬 저장 목업 — 추후 실제 DB로 교체 예정)
-   Store.* 함수의 시그니처만 유지하면 실제 백엔드 연동 시 내부 구현만
-   교체하면 됩니다.
+   API 클라이언트 (/api/schedules, /api/applications — 실제 서버 DB)
+   좋아요는 카운트 자체는 서버(공유), "내가 눌렀는지"만 이 브라우저에 기억합니다.
 ========================================================= */
-const Store = {
-  K_SCHEDULES: 'cbcal_schedules_v2',
-  K_APPLICATIONS: 'cbcal_applications_v2',
-  K_LIKED: 'cbcal_liked_v2',
-
-  getSchedules(){ try{ return JSON.parse(localStorage.getItem(this.K_SCHEDULES)) || []; }catch(e){ return []; } },
-  saveSchedules(arr){ localStorage.setItem(this.K_SCHEDULES, JSON.stringify(arr)); },
-  addSchedule(s){ const arr=this.getSchedules(); arr.push(s); this.saveSchedules(arr); return s; },
-  updateSchedule(id, patch){ const arr=this.getSchedules(); const i=arr.findIndex(x=>x.id===id); if(i>-1){ arr[i]={...arr[i], ...patch}; this.saveSchedules(arr);} },
-  deleteSchedule(id){ this.saveSchedules(this.getSchedules().filter(x=>x.id!==id)); },
-  getSchedule(id){ return this.getSchedules().find(x=>x.id===id) || null; },
-
-  getApplications(){ try{ return JSON.parse(localStorage.getItem(this.K_APPLICATIONS)) || []; }catch(e){ return []; } },
-  saveApplications(arr){ localStorage.setItem(this.K_APPLICATIONS, JSON.stringify(arr)); },
-  addApplication(a){ const arr=this.getApplications(); arr.push(a); this.saveApplications(arr); return a; },
-  updateApplication(id, patch){ const arr=this.getApplications(); const i=arr.findIndex(x=>x.id===id); if(i>-1){ arr[i]={...arr[i], ...patch}; this.saveApplications(arr);} },
-  deleteApplication(id){ this.saveApplications(this.getApplications().filter(x=>x.id!==id)); },
-  getApplication(id){ return this.getApplications().find(x=>x.id===id) || null; },
-
-  getLiked(){ try{ return JSON.parse(localStorage.getItem(this.K_LIKED)) || []; }catch(e){ return []; } },
-  isLiked(id){ return this.getLiked().includes(id); },
-  toggleLike(id){
-    const liked = this.getLiked();
-    const idx = liked.indexOf(id);
-    const schedules = this.getSchedules();
-    const s = schedules.find(x=>x.id===id);
-    if(!s) return;
-    if(idx>-1){ liked.splice(idx,1); s.likes = Math.max(0,(s.likes||0)-1); }
-    else{ liked.push(id); s.likes = (s.likes||0)+1; }
-    localStorage.setItem(this.K_LIKED, JSON.stringify(liked));
-    this.saveSchedules(schedules);
+const Api = {
+  async listSchedules(){
+    const r = await fetch('/api/schedules');
+    if(!r.ok) throw new Error('load_failed');
+    return r.json();
+  },
+  async submitApplication(payload){
+    const r = await fetch('/api/applications', {
+      method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify(payload)
+    });
+    if(!r.ok) throw new Error('submit_failed');
+    return r.json();
+  },
+  async setLike(id, liked){
+    const r = await fetch(`/api/schedules/${encodeURIComponent(id)}/like`, {
+      method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({liked})
+    });
+    if(!r.ok) throw new Error('like_failed');
+    return r.json();
   }
 };
 
-function uid(prefix){ return prefix+'_'+Date.now().toString(36)+Math.random().toString(36).slice(2,7); }
+const LikedTracker = {
+  KEY: 'cbcal_liked_v2',
+  get(){ try{ return JSON.parse(localStorage.getItem(this.KEY)) || []; }catch(e){ return []; } },
+  isLiked(id){ return this.get().includes(id); },
+  toggle(id){
+    const arr = this.get();
+    const idx = arr.indexOf(id);
+    let liked;
+    if(idx>-1){ arr.splice(idx,1); liked=false; } else { arr.push(id); liked=true; }
+    localStorage.setItem(this.KEY, JSON.stringify(arr));
+    return liked;
+  }
+};
 
-function seedIfEmpty(){
-  // 예시 데이터 없이 빈 상태로 시작합니다. 관리자 사이트에서 실제 일정을 등록하세요.
+// 캘린더/패널 렌더링은 이 캐시를 동기적으로 읽습니다. refreshSchedules()로 서버에서 다시 불러옵니다.
+let scheduleCache = [];
+async function refreshSchedules(){
+  try{ scheduleCache = await Api.listSchedules(); }
+  catch(e){ showToast('일정을 불러오지 못했습니다. 잠시 후 다시 시도해주세요.'); }
 }
+function getScheduleFromCache(id){ return scheduleCache.find(s=>s.id===id) || null; }
 
 /* =========================================================
    유틸
@@ -453,10 +436,10 @@ function openModal(innerHtml, opts){
 document.addEventListener('keydown', e=>{ if(e.key==='Escape') closeModal(); });
 
 function openScheduleModal(id){
-  const s = Store.getSchedule(id);
+  const s = getScheduleFromCache(id);
   if(!s){ showToast('삭제된 일정입니다.'); return; }
   const cat = CATEGORIES[s.category] || {label:s.category, color:'#888'};
-  const liked = Store.isLiked(id);
+  const liked = LikedTracker.isLiked(id);
   openModal(`
     <div class="modal-tag" style="background:${cat.color}">${escapeHtml(cat.label)}</div>
     <div class="modal-rows">
@@ -471,20 +454,28 @@ function openScheduleModal(id){
     </div>
   `);
 }
-function handleLike(id){
-  Store.toggleLike(id);
-  const s = Store.getSchedule(id);
-  const liked = Store.isLiked(id);
+async function handleLike(id){
+  const liked = LikedTracker.toggle(id);
   const btn = document.getElementById('like-btn');
-  if(btn){
-    btn.classList.toggle('liked', liked);
-    btn.innerHTML = `${liked?'❤️':'🤍'} <span id="like-count">${s.likes||0}</span>`;
+  if(btn) btn.disabled = true;
+  try{
+    const result = await Api.setLike(id, liked);
+    const cached = getScheduleFromCache(id);
+    if(cached) cached.likes = result.likes;
+    if(btn){
+      btn.classList.toggle('liked', liked);
+      btn.innerHTML = `${liked?'❤️':'🤍'} <span id="like-count">${result.likes}</span>`;
+    }
+    renderMainPanelsOnly();
+  }catch(e){
+    LikedTracker.toggle(id); // 실패 시 되돌리기
+    showToast('좋아요 처리에 실패했습니다.');
+  }finally{
+    if(btn) btn.disabled = false;
   }
-  renderRoute(); // refresh panels/calendar counts behind modal
-  // re-render kills modal root? no — modal root is separate from #app, so modal survives.
 }
 function openShareModal(id){
-  const s = Store.getSchedule(id);
+  const s = getScheduleFromCache(id);
   if(!s) return;
   const cat = CATEGORIES[s.category] || {label:s.category, color:'#888'};
   const url = location.origin + location.pathname + '#/?schedule=' + id;
@@ -541,15 +532,19 @@ function renderNav(path){
   });
 }
 window.addEventListener('hashchange', renderRoute);
-window.addEventListener('DOMContentLoaded', ()=>{ seedIfEmpty(); renderRoute(); });
+window.addEventListener('DOMContentLoaded', renderRoute);
 
-function renderRoute(){
+async function renderRoute(){
   const { path, params } = parseHash();
-  renderNav(path === '/admin' ? '' : path);
+  renderNav(path);
   const app = document.getElementById('app');
-  if(path.startsWith('/admin')) renderAdminPage(app);
-  else if(path.startsWith('/apply')) renderApplyPage(app);
-  else { renderMainPage(app); if(params.has('schedule')) openScheduleModal(params.get('schedule')); }
+  if(path.startsWith('/apply')){
+    renderApplyPage(app);
+    return;
+  }
+  await refreshSchedules();
+  renderMainPage(app);
+  if(params.has('schedule')) openScheduleModal(params.get('schedule'));
 }
 
 /* =========================================================
@@ -578,7 +573,7 @@ function buildCalendarCells(year, month){
 }
 
 function renderMainPage(app){
-  const schedules = Store.getSchedules();
+  const schedules = scheduleCache;
   const cells = buildCalendarCells(calState.year, calState.month);
   const byDate = {};
   schedules.forEach(s=>{
@@ -656,15 +651,19 @@ function renderMainPage(app){
 }
 
 function getTopLikedList(){
-  let list = Store.getSchedules();
+  let list = scheduleCache;
   if(panelState.left !== 'all') list = list.filter(s=>s.category===panelState.left);
   return list.slice().sort((a,b)=> (b.likes||0)-(a.likes||0)).slice(0,6);
 }
 function getUpcomingList(){
   // 아직 끝나지 않은 일정(진행 중 포함)만, 시작일이 빠른 순으로
-  let list = Store.getSchedules().filter(s=> daysUntil(s.endDate) >= 0);
+  let list = scheduleCache.filter(s=> daysUntil(s.endDate) >= 0);
   if(panelState.right !== 'all') list = list.filter(s=>s.category===panelState.right);
   return list.slice().sort((a,b)=> a.startDate.localeCompare(b.startDate)).slice(0,6);
+}
+function renderMainPanelsOnly(){
+  renderPanel('panel-left', getTopLikedList());
+  renderPanel('panel-right', getUpcomingList());
 }
 function renderPanel(elId, list){
   const el = document.getElementById(elId);
@@ -749,19 +748,24 @@ function renderApplyPage(app){
     if(!endDate){ showToast('종료일을 올바르게 입력해주세요.'); return; }
     if(endDate < startDate){ showToast('종료일이 시작일보다 빠를 수 없습니다.'); return; }
     const application = {
-      id: uid('a'),
       startDate, endDate,
       artist: fd.get('artist').trim(),
       category: fd.get('category'),
       name: fd.get('name').trim(),
       note: (fd.get('note')||'').trim(),
-      status: 'pending',
-      createdAt: Date.now()
     };
-    Store.addApplication(application);
-    showToast('신청이 접수되었습니다. 감사합니다!');
-    e.target.reset();
-    setupDateRangeInputs();
+    const submitBtn = e.target.querySelector('.submit-btn');
+    submitBtn.disabled = true;
+    try{
+      await Api.submitApplication(application);
+      showToast('신청이 접수되었습니다. 감사합니다!');
+      e.target.reset();
+      setupDateRangeInputs();
+    }catch(err){
+      showToast('신청 접수에 실패했습니다. 잠시 후 다시 시도해주세요.');
+    }finally{
+      submitBtn.disabled = false;
+    }
   });
 }
 
@@ -805,250 +809,6 @@ function readDateGroup(prefix){
   return `${y}-${mm}-${dd}`;
 }
 
-/* =========================================================
-   관리자 페이지
-   이 페이지는 Vercel Middleware(middleware.js)가 이미 /admin 경로를
-   HTTP Basic 인증으로 막아준 뒤에만 내려받아집니다. 즉 이 코드가 실행되는
-   시점엔 이미 인증이 끝난 상태라, 여기서 다시 로그인 여부를 확인할 필요가
-   없습니다.
-========================================================= */
-let adminTab = 'schedules';
-let adminAppFilter = 'all';
-
-function renderAdminPage(app){
-  app.innerHTML = `
-    <div class="mock-banner">⚠️ 현재 데이터는 이 브라우저에만 저장되는 목업 상태입니다. 실제 서비스에서는 별도 DB와 연동해야 합니다.</div>
-    <div class="admin-top">
-      <div class="admin-tabs">
-        <button class="admin-tab-btn ${adminTab==='schedules'?'active':''}" onclick="setAdminTab('schedules')">일정 관리</button>
-        <button class="admin-tab-btn ${adminTab==='applications'?'active':''}" onclick="setAdminTab('applications')">신청 내역</button>
-      </div>
-    </div>
-    <div id="admin-body"></div>
-  `;
-  renderAdminBody();
-}
-function setAdminTab(t){ adminTab = t; renderAdminBody(); }
-
-function renderAdminBody(){
-  const body = document.getElementById('admin-body');
-  if(!body) return;
-  if(adminTab === 'schedules') renderAdminSchedules(body);
-  else renderAdminApplications(body);
-}
-
-function renderAdminSchedules(body){
-  const list = Store.getSchedules().slice().sort((a,b)=>a.startDate.localeCompare(b.startDate));
-  const rows = list.map(s=>{
-    const cat = CATEGORIES[s.category]||{label:s.category,color:'#888'};
-    return `<tr>
-      <td>${fmtDateRangeKR(s.startDate, s.endDate)}</td>
-      <td>${escapeHtml(s.artist)}</td>
-      <td><span class="table-cat-tag" style="background:${cat.color}">${escapeHtml(cat.label)}</span></td>
-      <td>${escapeHtml(s.title||'-')}</td>
-      <td>❤️ ${s.likes||0}</td>
-      <td class="row-actions">
-        <button onclick="openScheduleFormModal('${s.id}')">수정</button>
-        <button class="del" onclick="confirmDeleteSchedule('${s.id}')">삭제</button>
-      </td>
-    </tr>`;
-  }).join('');
-  body.innerHTML = `
-    <div class="admin-toolbar">
-      <div></div>
-      <button class="add-btn" onclick="openScheduleFormModal()">+ 새 일정 추가</button>
-    </div>
-    <div class="data-table-wrap">
-      <table class="data-table">
-        <thead><tr><th>기간</th><th>아티스트</th><th>카테고리</th><th>제목</th><th>좋아요</th><th>관리</th></tr></thead>
-        <tbody>${rows || `<tr><td colspan="6" class="empty-table">등록된 일정이 없습니다.</td></tr>`}</tbody>
-      </table>
-    </div>
-  `;
-}
-
-function dateRangeFieldsHtml(startDate, endDate){
-  const [sy,sm,sd] = startDate ? startDate.split('-') : ['','',''];
-  const [ey,em,ed] = endDate ? endDate.split('-') : ['','',''];
-  return `
-    <div class="field">
-      <label>시작일</label>
-      <div class="date-group">
-        <input class="y" type="text" inputmode="numeric" maxlength="4" placeholder="YYYY" id="start-y" value="${sy}" autocomplete="off">
-        <input class="m" type="text" inputmode="numeric" maxlength="2" placeholder="MM" id="start-m" value="${sm}" autocomplete="off">
-        <input class="d" type="text" inputmode="numeric" maxlength="2" placeholder="DD" id="start-d" value="${sd}" autocomplete="off">
-      </div>
-      <div class="date-group-label"><span>년</span><span>월</span><span>일</span></div>
-    </div>
-    <div class="field">
-      <label>종료일</label>
-      <div class="date-group">
-        <input class="y" type="text" inputmode="numeric" maxlength="4" placeholder="YYYY" id="end-y" value="${ey}" autocomplete="off">
-        <input class="m" type="text" inputmode="numeric" maxlength="2" placeholder="MM" id="end-m" value="${em}" autocomplete="off">
-        <input class="d" type="text" inputmode="numeric" maxlength="2" placeholder="DD" id="end-d" value="${ed}" autocomplete="off">
-      </div>
-      <div class="date-group-label"><span>년</span><span>월</span><span>일</span></div>
-    </div>`;
-}
-
-function openScheduleFormModal(id){
-  const s = id ? Store.getSchedule(id) : null;
-  openModal(`
-    <div class="modal-tag" style="background:var(--accent)">${s?'일정 수정':'새 일정 추가'}</div>
-    <div class="modal-form-grid">
-      ${dateRangeFieldsHtml(s?s.startDate:'', s?s.endDate:'')}
-      <div class="field"><label>아티스트</label><input type="text" id="f-artist" value="${s?escapeHtml(s.artist):''}" placeholder="아티스트명"></div>
-      <div class="field"><label>카테고리</label>
-        <select id="f-category">
-          ${ALL_CATS.map(k=>`<option value="${k}" ${s&&s.category===k?'selected':''}>${CATEGORIES[k].label}</option>`).join('')}
-        </select>
-      </div>
-      <div class="field"><label>제목 (선택)</label><input type="text" id="f-title" value="${s?escapeHtml(s.title||''):''}" placeholder="앨범명 / 공연명 등"></div>
-      <div class="field"><label>비고 (선택)</label><textarea id="f-note" placeholder="추가 정보">${s?escapeHtml(s.note||''):''}</textarea></div>
-    </div>
-    <div class="modal-form-actions">
-      <button class="btn-ghost" onclick="closeModal()">취소</button>
-      <button class="btn-primary" onclick="saveScheduleForm(${s?`'${s.id}'`:'null'})">저장</button>
-    </div>
-  `, {wide:true});
-  setupDateRangeInputs();
-}
-function saveScheduleForm(id){
-  const startDate = readDateGroup('start');
-  const endDate = readDateGroup('end');
-  const artist = document.getElementById('f-artist').value.trim();
-  const category = document.getElementById('f-category').value;
-  const title = document.getElementById('f-title').value.trim();
-  const note = document.getElementById('f-note').value.trim();
-  if(!startDate){ showToast('시작일을 올바르게 입력해주세요.'); return; }
-  if(!endDate){ showToast('종료일을 올바르게 입력해주세요.'); return; }
-  if(!artist){ showToast('아티스트는 필수입니다.'); return; }
-  if(endDate < startDate){ showToast('종료일이 시작일보다 빠를 수 없습니다.'); return; }
-  if(id){
-    Store.updateSchedule(id, {startDate, endDate, artist, category, title, note});
-    showToast('일정이 수정되었습니다.');
-  } else {
-    Store.addSchedule({ id: uid('s'), startDate, endDate, artist, category, title, note, likes:0, createdAt: Date.now() });
-    showToast('일정이 추가되었습니다.');
-  }
-  closeModal();
-  renderAdminBody();
-}
-function confirmDeleteSchedule(id){
-  openModal(`
-    <div class="modal-tag" style="background:var(--danger)">일정 삭제</div>
-    <div class="modal-rows"><div class="modal-row"><span class="modal-value small">이 일정을 삭제하시겠습니까? 되돌릴 수 없습니다.</span></div></div>
-    <div class="modal-form-actions">
-      <button class="btn-ghost" onclick="closeModal()">취소</button>
-      <button class="btn-danger" onclick="Store.deleteSchedule('${id}'); closeModal(); renderAdminBody(); showToast('삭제되었습니다.');">삭제</button>
-    </div>
-  `);
-}
-
-function renderAdminApplications(body){
-  let list = Store.getApplications().slice().sort((a,b)=>b.createdAt-a.createdAt);
-  if(adminAppFilter !== 'all') list = list.filter(a=>a.status===adminAppFilter);
-  const rows = list.map(a=>{
-    const cat = CATEGORIES[a.category]||{label:a.category,color:'#888'};
-    return `<tr class="clickable" onclick="openApplicationModal('${a.id}')">
-      <td><span class="status-badge ${a.status}">${a.status==='pending'?'대기':'완료'}</span></td>
-      <td>${fmtDateRangeKR(a.startDate, a.endDate)}</td>
-      <td>${escapeHtml(a.artist)}</td>
-      <td><span class="table-cat-tag" style="background:${cat.color}">${escapeHtml(cat.label)}</span></td>
-      <td>${escapeHtml(a.name)}</td>
-      <td class="row-actions" onclick="event.stopPropagation()">
-        <button class="del" onclick="confirmDeleteApplication('${a.id}')">삭제</button>
-      </td>
-    </tr>`;
-  }).join('');
-  body.innerHTML = `
-    <div class="admin-toolbar">
-      <div class="status-filter">
-        <select onchange="adminAppFilter=this.value; renderAdminBody();">
-          <option value="all" ${adminAppFilter==='all'?'selected':''}>전체</option>
-          <option value="pending" ${adminAppFilter==='pending'?'selected':''}>대기</option>
-          <option value="uploaded" ${adminAppFilter==='uploaded'?'selected':''}>완료</option>
-        </select>
-      </div>
-      <div></div>
-    </div>
-    <div class="data-table-wrap">
-      <table class="data-table">
-        <thead><tr><th>상태</th><th>일자</th><th>아티스트</th><th>카테고리</th><th>신청자</th><th>관리</th></tr></thead>
-        <tbody>${rows || `<tr><td colspan="6" class="empty-table">신청 내역이 없습니다.</td></tr>`}</tbody>
-      </table>
-    </div>
-  `;
-}
-function openApplicationModal(id){
-  const a = Store.getApplication(id);
-  if(!a) return;
-  const cat = CATEGORIES[a.category]||{label:a.category,color:'#888'};
-  openModal(`
-    <div class="modal-tag" style="background:${cat.color}">${a.status==='pending'?'대기중 신청':'업로드 완료'}</div>
-    <div class="modal-rows">
-      <div class="modal-row"><span class="modal-label">기간</span><span class="modal-value">${fmtDateRangeKR(a.startDate, a.endDate)}</span></div>
-      <div class="modal-row"><span class="modal-label">아티스트</span><span class="modal-value">${escapeHtml(a.artist)}</span></div>
-      <div class="modal-row"><span class="modal-label">카테고리</span><span class="modal-value">${escapeHtml(cat.label)}</span></div>
-      <div class="modal-row"><span class="modal-label">신청자</span><span class="modal-value">${escapeHtml(a.name)}</span></div>
-      ${a.note?`<div class="modal-row"><span class="modal-label">비고</span><span class="modal-value small">${escapeHtml(a.note)}</span></div>`:''}
-    </div>
-    <div class="modal-form-actions">
-      <button class="btn-ghost" onclick="closeModal()">닫기</button>
-      <button class="btn-primary" onclick="openUploadFromApplication('${a.id}')">업로드</button>
-    </div>
-  `);
-}
-function openUploadFromApplication(appId){
-  const a = Store.getApplication(appId);
-  if(!a) return;
-  openModal(`
-    <div class="modal-tag" style="background:var(--accent)">일정으로 업로드</div>
-    <div class="modal-form-grid">
-      ${dateRangeFieldsHtml(a.startDate, a.endDate)}
-      <div class="field"><label>아티스트</label><input type="text" id="f-artist" value="${escapeHtml(a.artist)}"></div>
-      <div class="field"><label>카테고리</label>
-        <select id="f-category">
-          ${ALL_CATS.map(k=>`<option value="${k}" ${a.category===k?'selected':''}>${CATEGORIES[k].label}</option>`).join('')}
-        </select>
-      </div>
-      <div class="field"><label>제목 (선택)</label><input type="text" id="f-title" placeholder="앨범명 / 공연명 등"></div>
-      <div class="field"><label>비고 (선택)</label><textarea id="f-note">${escapeHtml(a.note||'')}</textarea></div>
-    </div>
-    <div class="modal-form-actions">
-      <button class="btn-ghost" onclick="closeModal()">취소</button>
-      <button class="btn-primary" onclick="confirmUploadApplication('${appId}')">캘린더에 업로드</button>
-    </div>
-  `, {wide:true});
-  setupDateRangeInputs();
-}
-function confirmUploadApplication(appId){
-  const startDate = readDateGroup('start');
-  const endDate = readDateGroup('end');
-  const artist = document.getElementById('f-artist').value.trim();
-  const category = document.getElementById('f-category').value;
-  const title = document.getElementById('f-title').value.trim();
-  const note = document.getElementById('f-note').value.trim();
-  if(!startDate){ showToast('시작일을 올바르게 입력해주세요.'); return; }
-  if(!endDate){ showToast('종료일을 올바르게 입력해주세요.'); return; }
-  if(!artist){ showToast('아티스트는 필수입니다.'); return; }
-  if(endDate < startDate){ showToast('종료일이 시작일보다 빠를 수 없습니다.'); return; }
-  Store.addSchedule({ id: uid('s'), startDate, endDate, artist, category, title, note, likes:0, createdAt: Date.now() });
-  Store.updateApplication(appId, {status:'uploaded'});
-  showToast('캘린더에 업로드되었습니다.');
-  closeModal();
-  renderAdminBody();
-}
-function confirmDeleteApplication(id){
-  openModal(`
-    <div class="modal-tag" style="background:var(--danger)">신청 삭제</div>
-    <div class="modal-rows"><div class="modal-row"><span class="modal-value small">이 신청 내역을 삭제하시겠습니까?</span></div></div>
-    <div class="modal-form-actions">
-      <button class="btn-ghost" onclick="closeModal()">취소</button>
-      <button class="btn-danger" onclick="Store.deleteApplication('${id}'); closeModal(); renderAdminBody(); showToast('삭제되었습니다.');">삭제</button>
-    </div>
-  `);
-}
 </script>
 </body>
 </html>
