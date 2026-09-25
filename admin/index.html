@@ -172,6 +172,7 @@ const Store = {
 
 function uid(prefix){ return prefix+'_'+Date.now().toString(36)+Math.random().toString(36).slice(2,7); }
 function fmtDateKR(iso){ const [y,m,d] = iso.split('-').map(Number); return `${y}년 ${m}월 ${d}일`; }
+function fmtDateRangeKR(start, end){ if(!end || start===end) return fmtDateKR(start); return `${fmtDateKR(start)} ~ ${fmtDateKR(end)}`; }
 function escapeHtml(str){ return String(str||'').replace(/[&<>"']/g, c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
 function showToast(msg){
   const root = document.getElementById('toast-root');
@@ -316,7 +317,7 @@ function renderApplications(body){
     const cat = CATEGORIES[a.category]||{label:a.category,color:'#888'};
     return `<tr class="clickable" onclick="openApplicationModal('${a.id}')">
       <td><span class="status-badge ${a.status}">${a.status==='pending'?'대기':'완료'}</span></td>
-      <td>${fmtDateKR(a.date)}</td>
+      <td>${fmtDateRangeKR(a.startDate, a.endDate)}</td>
       <td>${escapeHtml(a.artist)}</td>
       <td><span class="table-cat-tag" style="background:${cat.color}">${escapeHtml(cat.label)}</span></td>
       <td>${escapeHtml(a.name)}</td>
@@ -348,7 +349,7 @@ function openApplicationModal(id){
   openModal(`
     <div class="modal-tag" style="background:${cat.color}">${a.status==='pending'?'대기중 신청':'업로드 완료'}</div>
     <div class="modal-rows">
-      <div class="modal-row"><span class="modal-label">일자</span><span class="modal-value">${fmtDateKR(a.date)}</span></div>
+      <div class="modal-row"><span class="modal-label">기간</span><span class="modal-value">${fmtDateRangeKR(a.startDate, a.endDate)}</span></div>
       <div class="modal-row"><span class="modal-label">아티스트</span><span class="modal-value">${escapeHtml(a.artist)}</span></div>
       <div class="modal-row"><span class="modal-label">카테고리</span><span class="modal-value">${escapeHtml(cat.label)}</span></div>
       <div class="modal-row"><span class="modal-label">신청자</span><span class="modal-value">${escapeHtml(a.name)}</span></div>
@@ -362,16 +363,21 @@ function openApplicationModal(id){
 function openUploadFromApplication(appId){
   const a = Store.getApplication(appId);
   if(!a) return;
+  const isRange = a.endDate && a.endDate !== a.startDate;
+  const prefilledNote = isRange
+    ? (a.note ? a.note + `\n(신청 기간: ${fmtDateRangeKR(a.startDate, a.endDate)})` : `신청 기간: ${fmtDateRangeKR(a.startDate, a.endDate)}`)
+    : (a.note || '');
   openModal(`
     <div class="modal-tag" style="background:var(--accent)">일정으로 업로드</div>
+    ${isRange ? `<div class="hint" style="margin-bottom:12px;">신청 기간이 여러 날(${fmtDateRangeKR(a.startDate, a.endDate)})이지만, 캘린더 일정은 하루 단위라 우선 시작일로 채워뒀습니다. 필요하면 날짜를 바꾸거나, 업로드 후 다른 날짜로 일정을 추가로 만들어주세요.</div>` : ''}
     <div class="modal-form-grid">
-      <div class="field"><label>일자</label><input type="date" id="f-date" value="${a.date}"></div>
+      <div class="field"><label>일자</label><input type="date" id="f-date" value="${a.startDate}"></div>
       <div class="field"><label>아티스트</label><input type="text" id="f-artist" value="${escapeHtml(a.artist)}"></div>
       <div class="field"><label>카테고리</label>
         <select id="f-category">${ALL_CATS.map(k=>`<option value="${k}" ${a.category===k?'selected':''}>${CATEGORIES[k].label}</option>`).join('')}</select>
       </div>
       <div class="field"><label>제목 (선택)</label><input type="text" id="f-title" placeholder="앨범명 / 공연명 등"></div>
-      <div class="field"><label>비고 (선택)</label><textarea id="f-note">${escapeHtml(a.note||'')}</textarea></div>
+      <div class="field"><label>비고 (선택)</label><textarea id="f-note">${escapeHtml(prefilledNote)}</textarea></div>
     </div>
     <div class="modal-form-actions">
       <button class="btn-ghost" onclick="closeModal()">취소</button>
