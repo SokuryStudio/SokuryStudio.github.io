@@ -160,29 +160,42 @@ const CATEGORIES = {
 const ALL_CATS = Object.keys(CATEGORIES);
 
 /* =========================================================
-   데이터 저장소 — 메인 사이트와 동일한 로컬 저장 키를 사용하는 목업.
-   실제 서비스에서는 두 사이트가 같은 백엔드 DB를 바라보게 되며,
-   그때는 이 Store 함수들의 내부만 API 호출로 교체하면 됩니다.
+   API 클라이언트 — 이 페이지는 서버의 requireAdminBasicAuth(middleware.js)를
+   통과해야만 내려받아지므로, 여기서 보내는 쓰기 요청(/api/... POST/PUT/PATCH/DELETE)도
+   브라우저가 같은 인증을 자동으로 함께 보냅니다.
 ========================================================= */
-const Store = {
-  K_SCHEDULES: 'cbcal_schedules_v2',
-  K_APPLICATIONS: 'cbcal_applications_v2',
-
-  getSchedules(){ try{ return JSON.parse(localStorage.getItem(this.K_SCHEDULES)) || []; }catch(e){ return []; } },
-  saveSchedules(arr){ localStorage.setItem(this.K_SCHEDULES, JSON.stringify(arr)); },
-  addSchedule(s){ const arr=this.getSchedules(); arr.push(s); this.saveSchedules(arr); return s; },
-  updateSchedule(id, patch){ const arr=this.getSchedules(); const i=arr.findIndex(x=>x.id===id); if(i>-1){ arr[i]={...arr[i], ...patch}; this.saveSchedules(arr);} },
-  deleteSchedule(id){ this.saveSchedules(this.getSchedules().filter(x=>x.id!==id)); },
-  getSchedule(id){ return this.getSchedules().find(x=>x.id===id) || null; },
-
-  getApplications(){ try{ return JSON.parse(localStorage.getItem(this.K_APPLICATIONS)) || []; }catch(e){ return []; } },
-  saveApplications(arr){ localStorage.setItem(this.K_APPLICATIONS, JSON.stringify(arr)); },
-  updateApplication(id, patch){ const arr=this.getApplications(); const i=arr.findIndex(x=>x.id===id); if(i>-1){ arr[i]={...arr[i], ...patch}; this.saveApplications(arr);} },
-  deleteApplication(id){ this.saveApplications(this.getApplications().filter(x=>x.id!==id)); },
-  getApplication(id){ return this.getApplications().find(x=>x.id===id) || null; },
+const Api = {
+  async listSchedules(){ const r=await fetch('/api/schedules'); if(!r.ok) throw new Error('load_failed'); return r.json(); },
+  async createSchedule(payload){
+    const r=await fetch('/api/schedules', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify(payload)});
+    if(!r.ok) throw new Error('create_failed'); return r.json();
+  },
+  async updateSchedule(id, payload){
+    const r=await fetch(`/api/schedules/${encodeURIComponent(id)}`, {method:'PUT', headers:{'Content-Type':'application/json'}, body:JSON.stringify(payload)});
+    if(!r.ok) throw new Error('update_failed'); return r.json();
+  },
+  async deleteSchedule(id){
+    const r=await fetch(`/api/schedules/${encodeURIComponent(id)}`, {method:'DELETE'});
+    if(!r.ok) throw new Error('delete_failed');
+  },
+  async listApplications(){ const r=await fetch('/api/applications'); if(!r.ok) throw new Error('load_failed'); return r.json(); },
+  async patchApplication(id, payload){
+    const r=await fetch(`/api/applications/${encodeURIComponent(id)}`, {method:'PATCH', headers:{'Content-Type':'application/json'}, body:JSON.stringify(payload)});
+    if(!r.ok) throw new Error('update_failed'); return r.json();
+  },
+  async deleteApplication(id){
+    const r=await fetch(`/api/applications/${encodeURIComponent(id)}`, {method:'DELETE'});
+    if(!r.ok) throw new Error('delete_failed');
+  },
 };
 
-function uid(prefix){ return prefix+'_'+Date.now().toString(36)+Math.random().toString(36).slice(2,7); }
+// 화면 렌더링은 이 캐시를 동기적으로 읽고, 서버 호출 뒤에 다시 채웁니다.
+let scheduleCache = [];
+let applicationCache = [];
+async function refreshCaches(){
+  [scheduleCache, applicationCache] = await Promise.all([Api.listSchedules(), Api.listApplications()]);
+}
+
 function fmtDateKR(iso){ const [y,m,d] = iso.split('-').map(Number); return `${y}년 ${m}월 ${d}일`; }
 function fmtDateRangeKR(start, end){ if(!end || start===end) return fmtDateKR(start); return `${fmtDateKR(start)} ~ ${fmtDateKR(end)}`; }
 function fmtDateISO(dt){ return dt.getFullYear()+'-'+String(dt.getMonth()+1).padStart(2,'0')+'-'+String(dt.getDate()).padStart(2,'0'); }
@@ -292,17 +305,22 @@ document.addEventListener('keydown', e=>{ if(e.key==='Escape') closeModal(); });
 let adminTab = 'schedules';
 let adminAppFilter = 'all';
 
-function render(){
+async function render(){
   const app = document.getElementById('app');
-  const schedules = Store.getSchedules();
-  const applications = Store.getApplications();
-  const pendingCount = applications.filter(a=>a.status==='pending').length;
+  app.innerHTML = `<div class="mock-banner">불러오는 중…</div>`;
+  try{
+    await refreshCaches();
+  }catch(e){
+    app.innerHTML = `<div class="mock-banner">⚠️ 서버에서 데이터를 불러오지 못했습니다. 잠시 후 새로고침해주세요.</div>`;
+    return;
+  }
+  const pendingCount = applicationCache.filter(a=>a.status==='pending').length;
 
   app.innerHTML = `
-    <div class="mock-banner">⚠️ 이 관리자 페이지는 현재 브라우저 로컬 저장 방식의 목업입니다. 실제 배포 시 메인 사이트와 같은 DB를 바라보도록 연동해야 신청/일정이 서로 반영됩니다.</div>
+    <div class="mock-banner">이 페이지는 서버(/api/schedules, /api/applications)의 데이터를 그대로 보여주며, 메인 사이트와 실시간으로 공유됩니다.</div>
     <div class="stat-row">
-      <div class="stat-card"><div class="num">${schedules.length}</div><div class="label">등록된 일정</div></div>
-      <div class="stat-card"><div class="num">${applications.length}</div><div class="label">총 신청 건수</div></div>
+      <div class="stat-card"><div class="num">${scheduleCache.length}</div><div class="label">등록된 일정</div></div>
+      <div class="stat-card"><div class="num">${applicationCache.length}</div><div class="label">총 신청 건수</div></div>
       <div class="stat-card"><div class="num">${pendingCount}</div><div class="label">대기중인 신청</div></div>
     </div>
     <div class="admin-top">
@@ -326,7 +344,7 @@ function renderBody(){
    일정 관리
 ========================================================= */
 function renderSchedules(body){
-  const list = Store.getSchedules().slice().sort((a,b)=>a.startDate.localeCompare(b.startDate));
+  const list = scheduleCache.slice().sort((a,b)=>a.startDate.localeCompare(b.startDate));
   const rows = list.map(s=>{
     const cat = CATEGORIES[s.category]||{label:s.category,color:'#888'};
     return `<tr>
@@ -354,7 +372,7 @@ function renderSchedules(body){
     </div>`;
 }
 function openScheduleForm(id){
-  const s = id ? Store.getSchedule(id) : null;
+  const s = id ? scheduleCache.find(x=>x.id===id) : null;
   openModal(`
     <div class="modal-tag" style="background:var(--accent)">${s?'일정 수정':'새 일정 추가'}</div>
     <div class="modal-form-grid">
@@ -368,12 +386,12 @@ function openScheduleForm(id){
     </div>
     <div class="modal-form-actions">
       <button class="btn-ghost" onclick="closeModal()">취소</button>
-      <button class="btn-primary" onclick="saveScheduleForm(${s?`'${s.id}'`:'null'})">저장</button>
+      <button class="btn-primary" id="schedule-save-btn" onclick="saveScheduleForm(${s?`'${s.id}'`:'null'})">저장</button>
     </div>
   `, {wide:true});
   setupDateRangeInputs();
 }
-function saveScheduleForm(id){
+async function saveScheduleForm(id){
   const startDate = readDateGroup('start');
   const endDate = readDateGroup('end');
   const artist = document.getElementById('f-artist').value.trim();
@@ -384,9 +402,18 @@ function saveScheduleForm(id){
   if(!endDate){ showToast('종료일을 올바르게 입력해주세요.'); return; }
   if(!artist){ showToast('아티스트는 필수입니다.'); return; }
   if(endDate < startDate){ showToast('종료일이 시작일보다 빠를 수 없습니다.'); return; }
-  if(id){ Store.updateSchedule(id, {startDate, endDate, artist, category, title, note}); showToast('일정이 수정되었습니다.'); }
-  else{ Store.addSchedule({ id: uid('s'), startDate, endDate, artist, category, title, note, likes:0, createdAt: Date.now() }); showToast('일정이 추가되었습니다.'); }
-  closeModal(); renderBody();
+  const btn = document.getElementById('schedule-save-btn');
+  if(btn) btn.disabled = true;
+  try{
+    if(id){ await Api.updateSchedule(id, {startDate, endDate, artist, category, title, note}); showToast('일정이 수정되었습니다.'); }
+    else{ await Api.createSchedule({startDate, endDate, artist, category, title, note}); showToast('일정이 추가되었습니다.'); }
+    await refreshCaches();
+    closeModal();
+    renderBody();
+  }catch(e){
+    showToast('저장에 실패했습니다.');
+    if(btn) btn.disabled = false;
+  }
 }
 function confirmDeleteSchedule(id){
   openModal(`
@@ -394,15 +421,25 @@ function confirmDeleteSchedule(id){
     <div class="modal-rows"><div class="modal-row"><span class="modal-value small">이 일정을 삭제하시겠습니까? 되돌릴 수 없습니다.</span></div></div>
     <div class="modal-form-actions">
       <button class="btn-ghost" onclick="closeModal()">취소</button>
-      <button class="btn-danger" onclick="Store.deleteSchedule('${id}'); closeModal(); renderBody(); showToast('삭제되었습니다.');">삭제</button>
+      <button class="btn-danger" onclick="doDeleteSchedule('${id}')">삭제</button>
     </div>`);
+}
+async function doDeleteSchedule(id){
+  try{
+    await Api.deleteSchedule(id);
+    await refreshCaches();
+    closeModal(); renderBody();
+    showToast('삭제되었습니다.');
+  }catch(e){
+    showToast('삭제에 실패했습니다.');
+  }
 }
 
 /* =========================================================
    신청 내역
 ========================================================= */
 function renderApplications(body){
-  let list = Store.getApplications().slice().sort((a,b)=>b.createdAt-a.createdAt);
+  let list = applicationCache.slice().sort((a,b)=>b.createdAt-a.createdAt);
   if(adminAppFilter !== 'all') list = list.filter(a=>a.status===adminAppFilter);
   const rows = list.map(a=>{
     const cat = CATEGORIES[a.category]||{label:a.category,color:'#888'};
@@ -428,13 +465,13 @@ function renderApplications(body){
     </div>
     <div class="data-table-wrap">
       <table class="data-table">
-        <thead><tr><th>상태</th><th>일자</th><th>아티스트</th><th>카테고리</th><th>신청자</th><th>관리</th></tr></thead>
+        <thead><tr><th>상태</th><th>기간</th><th>아티스트</th><th>카테고리</th><th>신청자</th><th>관리</th></tr></thead>
         <tbody>${rows || `<tr><td colspan="6" class="empty-table">신청 내역이 없습니다.</td></tr>`}</tbody>
       </table>
     </div>`;
 }
 function openApplicationModal(id){
-  const a = Store.getApplication(id);
+  const a = applicationCache.find(x=>x.id===id);
   if(!a) return;
   const cat = CATEGORIES[a.category]||{label:a.category,color:'#888'};
   openModal(`
@@ -452,7 +489,7 @@ function openApplicationModal(id){
     </div>`);
 }
 function openUploadFromApplication(appId){
-  const a = Store.getApplication(appId);
+  const a = applicationCache.find(x=>x.id===appId);
   if(!a) return;
   openModal(`
     <div class="modal-tag" style="background:var(--accent)">일정으로 업로드</div>
@@ -467,12 +504,12 @@ function openUploadFromApplication(appId){
     </div>
     <div class="modal-form-actions">
       <button class="btn-ghost" onclick="closeModal()">취소</button>
-      <button class="btn-primary" onclick="confirmUploadApplication('${appId}')">캘린더에 업로드</button>
+      <button class="btn-primary" id="upload-btn" onclick="confirmUploadApplication('${appId}')">캘린더에 업로드</button>
     </div>
   `, {wide:true});
   setupDateRangeInputs();
 }
-function confirmUploadApplication(appId){
+async function confirmUploadApplication(appId){
   const startDate = readDateGroup('start');
   const endDate = readDateGroup('end');
   const artist = document.getElementById('f-artist').value.trim();
@@ -483,10 +520,18 @@ function confirmUploadApplication(appId){
   if(!endDate){ showToast('종료일을 올바르게 입력해주세요.'); return; }
   if(!artist){ showToast('아티스트는 필수입니다.'); return; }
   if(endDate < startDate){ showToast('종료일이 시작일보다 빠를 수 없습니다.'); return; }
-  Store.addSchedule({ id: uid('s'), startDate, endDate, artist, category, title, note, likes:0, createdAt: Date.now() });
-  Store.updateApplication(appId, {status:'uploaded'});
-  showToast('캘린더에 업로드되었습니다.');
-  closeModal(); renderBody();
+  const btn = document.getElementById('upload-btn');
+  if(btn) btn.disabled = true;
+  try{
+    await Api.createSchedule({startDate, endDate, artist, category, title, note});
+    await Api.patchApplication(appId, {status:'uploaded'});
+    await refreshCaches();
+    showToast('캘린더에 업로드되었습니다.');
+    closeModal(); renderBody();
+  }catch(e){
+    showToast('업로드에 실패했습니다.');
+    if(btn) btn.disabled = false;
+  }
 }
 function confirmDeleteApplication(id){
   openModal(`
@@ -494,8 +539,18 @@ function confirmDeleteApplication(id){
     <div class="modal-rows"><div class="modal-row"><span class="modal-value small">이 신청 내역을 삭제하시겠습니까?</span></div></div>
     <div class="modal-form-actions">
       <button class="btn-ghost" onclick="closeModal()">취소</button>
-      <button class="btn-danger" onclick="Store.deleteApplication('${id}'); closeModal(); renderBody(); showToast('삭제되었습니다.');">삭제</button>
+      <button class="btn-danger" onclick="doDeleteApplication('${id}')">삭제</button>
     </div>`);
+}
+async function doDeleteApplication(id){
+  try{
+    await Api.deleteApplication(id);
+    await refreshCaches();
+    closeModal(); renderBody();
+    showToast('삭제되었습니다.');
+  }catch(e){
+    showToast('삭제에 실패했습니다.');
+  }
 }
 
 window.addEventListener('DOMContentLoaded', render);
