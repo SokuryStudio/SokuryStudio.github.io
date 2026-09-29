@@ -5,7 +5,7 @@
 // 환경변수로만 읽고, 이 파일 어디에도 실제 값을 적지 않습니다.
 //
 // 인증이 필요한 것:
-//   - /admin, /admin/*                         (관리자 페이지 자체)
+//   - /manage, /manage/*                       (관리자 페이지 자체)
 //   - POST   /api/schedules                     (일정 생성)
 //   - PUT/DELETE /api/schedules/:id              (일정 수정/삭제)
 //   - GET    /api/applications                   (신청 목록 조회 — 개인정보 포함)
@@ -17,8 +17,8 @@
 
 export const config = {
   matcher: [
-    '/admin',
-    '/admin/:path*',
+    '/manage',
+    '/manage/:path*',
     '/api/schedules',
     '/api/schedules/:path*',
     '/api/applications',
@@ -26,7 +26,7 @@ export const config = {
   ],
 };
 
-const REALM = 'Admin Area';
+const REALM = 'Manage Area';
 // 아이디가 틀렸는지 비밀번호가 틀렸는지 구분하지 않는 단 하나의 메시지.
 const GENERIC_MESSAGE = '인증이 필요합니다.';
 
@@ -82,7 +82,7 @@ function applicationNeedsAuth(segments, method) {
 }
 
 function pathNeedsAuth(pathname, method) {
-  if (pathname === '/admin' || pathname.startsWith('/admin/')) return true;
+  if (pathname === '/manage' || pathname.startsWith('/manage/')) return true;
   const segments = pathname.split('/').filter(Boolean); // 예: ['api','schedules','abc','like']
   if (segments[0] !== 'api') return false;
   if (segments[1] === 'schedules') return scheduleNeedsAuth(segments, method);
@@ -142,5 +142,5 @@ export default async function middleware(request) {
     return unauthorized();
   }
 
-  // 통과 — 이후 정적 파일(/admin/index.html) 또는 API 함수가 그대로 실행됩니다.
+  // 통과 — 이후 정적 파일(/manage/index.html) 또는 API 함수가 그대로 실행됩니다.
 }
