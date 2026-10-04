@@ -324,25 +324,20 @@ const ALL_CATS = [...TOP_CATS, ...BOTTOM_CATS];
    API 클라이언트 (/api/schedules, /api/applications — 실제 서버 DB)
    좋아요는 카운트 자체는 서버(공유), "내가 눌렀는지"만 이 브라우저에 기억합니다.
 ========================================================= */
+async function apiCall(query, options){
+  const r = await fetch('/api/data?' + query, options);
+  let data = null;
+  try{ data = await r.json(); }catch(e){}
+  if(!r.ok) throw new Error((data && data.error) || ('서버 오류 (' + r.status + ')'));
+  return data;
+}
 const Api = {
-  async listSchedules(){
-    const r = await fetch('/api/schedules');
-    if(!r.ok) throw new Error('load_failed');
-    return r.json();
+  listSchedules(){ return apiCall('resource=schedules'); },
+  submitApplication(payload){
+    return apiCall('resource=applications', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify(payload) });
   },
-  async submitApplication(payload){
-    const r = await fetch('/api/applications', {
-      method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify(payload)
-    });
-    if(!r.ok) throw new Error('submit_failed');
-    return r.json();
-  },
-  async setLike(id, liked){
-    const r = await fetch(`/api/schedules/${encodeURIComponent(id)}/like`, {
-      method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({liked})
-    });
-    if(!r.ok) throw new Error('like_failed');
-    return r.json();
+  setLike(id, liked){
+    return apiCall('resource=schedules&id=' + encodeURIComponent(id) + '&action=like', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({liked}) });
   }
 };
 
@@ -364,7 +359,7 @@ const LikedTracker = {
 let scheduleCache = [];
 async function refreshSchedules(){
   try{ scheduleCache = await Api.listSchedules(); }
-  catch(e){ showToast('일정을 불러오지 못했습니다. 잠시 후 다시 시도해주세요.'); }
+  catch(e){ showToast('일정을 불러오지 못했습니다: ' + e.message); }
 }
 function getScheduleFromCache(id){ return scheduleCache.find(s=>s.id===id) || null; }
 
@@ -762,7 +757,7 @@ function renderApplyPage(app){
       e.target.reset();
       setupDateRangeInputs();
     }catch(err){
-      showToast('신청 접수에 실패했습니다. 잠시 후 다시 시도해주세요.');
+      showToast('신청 접수에 실패했습니다: ' + err.message);
     }finally{
       submitBtn.disabled = false;
     }
