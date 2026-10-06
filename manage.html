@@ -240,6 +240,132 @@ function clampDigits(el, maxLen, maxVal){
     el.value = v;
   });
 }
+/* =========================================================
+   공유 카드 이미지 (링크 미리보기용, 1200x630)
+   공유 팝업의 카드 디자인을 그대로 캔버스에 그려 서버에 저장합니다.
+========================================================= */
+const OG_CAT_COLORS = { regular:'#7C5CFC', ep:'#12B886', single:'#228BE6', mixtape:'#F59F00', compilation:'#E64980', physical:'#495057', concert:'#E03131' };
+const OG_FONT = '"Noto Sans KR", "Apple SD Gothic Neo", "Malgun Gothic", sans-serif';
+
+function ogRoundRect(ctx, x, y, w, h, r){
+  ctx.beginPath();
+  ctx.moveTo(x+r, y); ctx.arcTo(x+w, y, x+w, y+h, r); ctx.arcTo(x+w, y+h, x, y+h, r);
+  ctx.arcTo(x, y+h, x, y, r); ctx.arcTo(x, y, x+w, y, r); ctx.closePath();
+}
+// 띄어쓰기 기준으로 줄바꿈(한 단어가 너무 길면 글자 단위로), maxLines 넘으면 말줄임
+function ogWrap(ctx, text, maxWidth, maxLines){
+  const lines = []; let line = '';
+  const push = ()=>{ lines.push(line); line=''; };
+  for(const word of String(text).split(/(\s+)/)){
+    if(!word) continue;
+    if(ctx.measureText(line + word).width <= maxWidth){ line += word; continue; }
+    if(line.trim()) push();
+    if(/^\s+$/.test(word)) continue;
+    if(ctx.measureText(word).width <= maxWidth){ line = word; continue; }
+    for(const ch of word){
+      if(ctx.measureText(line + ch).width > maxWidth){ push(); }
+      line += ch;
+    }
+  }
+  if(line.trim()) push();
+  if(lines.length > maxLines){
+    const kept = lines.slice(0, maxLines);
+    let last = kept[maxLines-1];
+    while(last && ctx.measureText(last + '…').width > maxWidth) last = last.slice(0, -1);
+    kept[maxLines-1] = last.trimEnd() + '…';
+    return kept;
+  }
+  return lines;
+}
+
+async function renderShareCardPng(s){
+  const cat = CATEGORIES[s.category] || { label: s.category };
+  const color = OG_CAT_COLORS[s.category] || '#6C5CFC';
+  const meta = fmtDateRangeKR(s.startDate, s.endDate) + (s.title ? ' · ' + s.title : '') + (s.venue ? ' · ' + s.venue : '');
+  // 그리기 전에 필요한 한글 글자를 웹폰트에서 미리 받아둠
+  if(document.fonts && document.fonts.load){
+    const allText = cat.label + s.artist + meta + 'Sokury…';
+    try{
+      await Promise.all([
+        document.fonts.load(`700 36px ${OG_FONT}`, allText),
+        document.fonts.load(`900 76px ${OG_FONT}`, allText),
+        document.fonts.load(`500 36px ${OG_FONT}`, allText),
+      ]);
+    }catch(e){}
+  }
+
+  const W = 1200, H = 630;
+  const c = document.createElement('canvas'); c.width = W; c.height = H;
+  const ctx = c.getContext('2d');
+  ctx.textBaseline = 'alphabetic';
+
+  // 바깥(팝업 흰 배경) + 카드
+  ctx.fillStyle = '#ffffff'; ctx.fillRect(0, 0, W, H);
+  const cx = 56, cy = 56, cw = W - 112, ch = H - 112;
+  ogRoundRect(ctx, cx, cy, cw, ch, 40);
+  ctx.fillStyle = '#f0f1f6'; ctx.fill();
+  ctx.lineWidth = 2; ctx.strokeStyle = '#e3e5ec'; ctx.stroke();
+
+  const px = cx + 72, inner = cw - 144;
+  let y = cy + 72;
+
+  // 카테고리 태그
+  ctx.font = `700 36px ${OG_FONT}`;
+  const tagW = ctx.measureText(cat.label).width + 56, tagH = 64;
+  ogRoundRect(ctx, px, y, tagW, tagH, tagH/2);
+  ctx.fillStyle = color; ctx.fill();
+  ctx.fillStyle = '#ffffff'; ctx.fillText(cat.label, px + 28, y + 45);
+  y += tagH + 34;
+
+  // 아티스트
+  ctx.font = `900 76px ${OG_FONT}`;
+  ctx.fillStyle = '#1c1e26';
+  const artistLines = ogWrap(ctx, s.artist, inner, 2);
+  for(const l of artistLines){ y += 76; ctx.fillText(l, px, y); y += 14; }
+  y += 18;
+
+  // 기간 · 제목 · 공연장
+  ctx.font = `500 36px ${OG_FONT}`;
+  ctx.fillStyle = '#8b8fa3';
+  const room = Math.max(1, Math.floor((cy + ch - 110 - y) / 54));
+  for(const l of ogWrap(ctx, meta, inner, Math.min(3, room))){ y += 40; ctx.fillText(l, px, y); y += 14; }
+
+  // 브랜드
+  ctx.font = `900 34px ${OG_FONT}`;
+  ctx.fillStyle = '#6C5CFC';
+  ctx.textAlign = 'right';
+  ctx.fillText('Sokury', cx + cw - 64, cy + ch - 52);
+  ctx.textAlign = 'left';
+
+  return c.toDataURL('image/png');
+}
+
+async function uploadShareCard(s){
+  if(!s || !s.id) return;
+  try{
+    const png = await renderShareCardPng(s);
+    await apiCall('resource=ogimage&id=' + encodeURIComponent(s.id), { method:'PUT', headers:JSON_HEADERS, body: JSON.stringify({ png }) });
+  }catch(e){
+    showToast('미리보기 이미지 저장 실패: ' + e.message);
+  }
+}
+
+async function regenerateAllShareCards(){
+  const list = scheduleCache.slice();
+  if(!list.length){ showToast('일정이 없습니다.'); return; }
+  showToast(`미리보기 이미지 ${list.length}개 생성 중…`);
+  for(const s of list) await uploadShareCard(s);
+  await refreshCaches(); renderBody();
+  showToast('미리보기 이미지 생성 완료');
+}
+
+function bindVenueToggle(selectId, wrapId){
+  const sel = document.getElementById(selectId), wrap = document.getElementById(wrapId);
+  if(!sel || !wrap) return;
+  const sync = ()=>{ wrap.style.display = sel.value==='concert' ? '' : 'none'; };
+  sel.onchange = sync;
+  sync();
+}
 function setupDateRangeInputs(){
   const sy=document.getElementById('start-y'), sm=document.getElementById('start-m'), sd=document.getElementById('start-d');
   const ey=document.getElementById('end-y'), em=document.getElementById('end-m'), ed=document.getElementById('end-d');
@@ -344,7 +470,7 @@ function renderSchedules(body){
       <td>${fmtDateRangeKR(s.startDate, s.endDate)}</td>
       <td>${escapeHtml(s.artist)}</td>
       <td><span class="table-cat-tag" style="background:${cat.color}">${escapeHtml(cat.label)}</span></td>
-      <td>${escapeHtml(s.title||'-')}</td>
+      <td>${escapeHtml(s.title||'-')}${s.venue?`<div style="font-size:11px;color:var(--text-faint)">${escapeHtml(s.venue)}</div>`:''}</td>
       <td>❤️ ${s.likes||0}</td>
       <td class="row-actions">
         <button onclick="openScheduleForm('${s.id}')">수정</button>
@@ -354,7 +480,7 @@ function renderSchedules(body){
   }).join('');
   body.innerHTML = `
     <div class="admin-toolbar">
-      <div></div>
+      <button class="btn-ghost" onclick="regenerateAllShareCards()">🖼 공유 미리보기 이미지 전체 생성</button>
       <button class="add-btn" onclick="openScheduleForm()">+ 새 일정 추가</button>
     </div>
     <div class="data-table-wrap">
@@ -375,6 +501,7 @@ function openScheduleForm(id){
         <select id="f-category">${ALL_CATS.map(k=>`<option value="${k}" ${s&&s.category===k?'selected':''}>${CATEGORIES[k].label}</option>`).join('')}</select>
       </div>
       <div class="field"><label>제목 (선택)</label><input type="text" id="f-title" value="${s?escapeHtml(s.title||''):''}" placeholder="앨범명 / 공연명 등"></div>
+      <div class="field" id="f-venue-wrap" style="display:none"><label>공연장</label><input type="text" id="f-venue" value="${s?escapeHtml(s.venue||''):''}" placeholder="예: 올림픽공원 KSPO DOME"></div>
       <div class="field"><label>비고 (선택)</label><textarea id="f-note" placeholder="추가 정보">${s?escapeHtml(s.note||''):''}</textarea></div>
     </div>
     <div class="modal-form-actions">
@@ -383,6 +510,7 @@ function openScheduleForm(id){
     </div>
   `, {wide:true});
   setupDateRangeInputs();
+  bindVenueToggle('f-category', 'f-venue-wrap');
 }
 async function saveScheduleForm(id){
   const startDate = readDateGroup('start');
@@ -390,6 +518,7 @@ async function saveScheduleForm(id){
   const artist = document.getElementById('f-artist').value.trim();
   const category = document.getElementById('f-category').value;
   const title = document.getElementById('f-title').value.trim();
+  const venue = category==='concert' ? document.getElementById('f-venue').value.trim() : '';
   const note = document.getElementById('f-note').value.trim();
   if(!startDate){ showToast('시작일을 올바르게 입력해주세요.'); return; }
   if(!endDate){ showToast('종료일을 올바르게 입력해주세요.'); return; }
@@ -398,8 +527,8 @@ async function saveScheduleForm(id){
   const btn = document.getElementById('schedule-save-btn');
   if(btn) btn.disabled = true;
   try{
-    if(id){ await Api.updateSchedule(id, {startDate, endDate, artist, category, title, note}); showToast('일정이 수정되었습니다.'); }
-    else{ await Api.createSchedule({startDate, endDate, artist, category, title, note}); showToast('일정이 추가되었습니다.'); }
+    if(id){ const saved = await Api.updateSchedule(id, {startDate, endDate, artist, category, title, venue, note}); await uploadShareCard(saved); showToast('일정이 수정되었습니다.'); }
+    else{ const saved = await Api.createSchedule({startDate, endDate, artist, category, title, venue, note}); await uploadShareCard(saved); showToast('일정이 추가되었습니다.'); }
     await refreshCaches();
     closeModal();
     renderBody();
@@ -474,6 +603,7 @@ function openApplicationModal(id){
       <div class="modal-row"><span class="modal-label">아티스트</span><span class="modal-value">${escapeHtml(a.artist)}</span></div>
       <div class="modal-row"><span class="modal-label">카테고리</span><span class="modal-value">${escapeHtml(cat.label)}</span></div>
       <div class="modal-row"><span class="modal-label">신청자</span><span class="modal-value">${escapeHtml(a.name)}</span></div>
+      ${a.venue?`<div class="modal-row"><span class="modal-label">공연장</span><span class="modal-value">${escapeHtml(a.venue)}</span></div>`:''}
       ${a.note?`<div class="modal-row"><span class="modal-label">비고</span><span class="modal-value small">${escapeHtml(a.note)}</span></div>`:''}
     </div>
     <div class="modal-form-actions">
@@ -493,6 +623,7 @@ function openUploadFromApplication(appId){
         <select id="f-category">${ALL_CATS.map(k=>`<option value="${k}" ${a.category===k?'selected':''}>${CATEGORIES[k].label}</option>`).join('')}</select>
       </div>
       <div class="field"><label>제목 (선택)</label><input type="text" id="f-title" placeholder="앨범명 / 공연명 등"></div>
+      <div class="field" id="f-venue-wrap" style="display:none"><label>공연장</label><input type="text" id="f-venue" value="${escapeHtml(a.venue||'')}" placeholder="예: 올림픽공원 KSPO DOME"></div>
       <div class="field"><label>비고 (선택)</label><textarea id="f-note">${escapeHtml(a.note||'')}</textarea></div>
     </div>
     <div class="modal-form-actions">
@@ -501,6 +632,7 @@ function openUploadFromApplication(appId){
     </div>
   `, {wide:true});
   setupDateRangeInputs();
+  bindVenueToggle('f-category', 'f-venue-wrap');
 }
 async function confirmUploadApplication(appId){
   const startDate = readDateGroup('start');
@@ -508,6 +640,7 @@ async function confirmUploadApplication(appId){
   const artist = document.getElementById('f-artist').value.trim();
   const category = document.getElementById('f-category').value;
   const title = document.getElementById('f-title').value.trim();
+  const venue = category==='concert' ? document.getElementById('f-venue').value.trim() : '';
   const note = document.getElementById('f-note').value.trim();
   if(!startDate){ showToast('시작일을 올바르게 입력해주세요.'); return; }
   if(!endDate){ showToast('종료일을 올바르게 입력해주세요.'); return; }
@@ -516,7 +649,8 @@ async function confirmUploadApplication(appId){
   const btn = document.getElementById('upload-btn');
   if(btn) btn.disabled = true;
   try{
-    await Api.createSchedule({startDate, endDate, artist, category, title, note});
+    const saved = await Api.createSchedule({startDate, endDate, artist, category, title, venue, note});
+    await uploadShareCard(saved);
     await Api.patchApplication(appId, {status:'uploaded'});
     await refreshCaches();
     showToast('캘린더에 업로드되었습니다.');

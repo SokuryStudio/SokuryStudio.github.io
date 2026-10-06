@@ -3,7 +3,7 @@
 // 비밀번호는 Vercel 환경변수 ADMIN_USER / ADMIN_PASSWORD 에만 있고, 이 파일엔 없습니다.
 
 export const config = {
-  matcher: ['/manage', '/manage.html', '/manage/:path*', '/api/data'],
+  matcher: ['/manage', '/manage.html', '/manage/:path*', '/api/data', '/og/:path*'],
 };
 
 const REALM = 'Manage Area';
@@ -33,12 +33,15 @@ function timingSafeEqual(a, b) {
 function needsAuth(url, method) {
   const p = url.pathname;
   if (p === '/manage' || p === '/manage.html' || p.startsWith('/manage/')) return true;
+  if (p.startsWith('/og/')) return method !== 'GET' && method !== 'HEAD'; // 카드 이미지 짧은 주소: 보기만 공개
 
   if (p === '/api/data') {
     const resource = url.searchParams.get('resource');
     const id = url.searchParams.get('id');
     const action = url.searchParams.get('action');
     if (resource === 'health') return false;                       // 진단: 공개
+    if (resource === 'share') return false;                        // 공유 미리보기: 공개
+    if (resource === 'ogimage') return method !== 'GET';           // 카드 이미지: 보기는 공개, 저장은 관리자
     if (resource === 'schedules') {
       if (method === 'GET') return false;                          // 일정 조회: 공개
       if (method === 'POST' && id && action === 'like') return false; // 좋아요: 공개

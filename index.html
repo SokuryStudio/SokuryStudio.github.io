@@ -440,7 +440,8 @@ function openScheduleModal(id){
     <div class="modal-rows">
       <div class="modal-row"><span class="modal-label">일정</span><span class="modal-value">${fmtDateRangeKR(s.startDate, s.endDate)}</span></div>
       <div class="modal-row"><span class="modal-label">아티스트</span><span class="modal-value">${escapeHtml(s.artist)}</span></div>
-      <div class="modal-row"><span class="modal-label">항목</span><span class="modal-value">${escapeHtml(cat.label)}${s.title?' · '+escapeHtml(s.title):''}</span></div>
+      <div class="modal-row"><span class="modal-label">항목</span><span class="modal-value">${s.title?escapeHtml(s.title):'-'}</span></div>
+      ${s.venue?`<div class="modal-row"><span class="modal-label">공연장</span><span class="modal-value">${escapeHtml(s.venue)}</span></div>`:''}
       ${s.note?`<div class="modal-row"><span class="modal-label">비고</span><span class="modal-value small">${escapeHtml(s.note)}</span></div>`:''}
     </div>
     <div class="modal-actions">
@@ -473,13 +474,13 @@ function openShareModal(id){
   const s = getScheduleFromCache(id);
   if(!s) return;
   const cat = CATEGORIES[s.category] || {label:s.category, color:'#888'};
-  const url = location.origin + location.pathname + '#/?schedule=' + id;
+  const url = location.origin + '/s/' + encodeURIComponent(id);
   openModal(`
     <div class="modal-tag" style="background:${cat.color}">공유하기</div>
     <div class="share-card">
       <div class="tag" style="background:${cat.color}">${escapeHtml(cat.label)}</div>
       <div class="artist">${escapeHtml(s.artist)}</div>
-      <div class="date">${fmtDateRangeKR(s.startDate, s.endDate)}${s.title?' · '+escapeHtml(s.title):''}</div>
+      <div class="date">${fmtDateRangeKR(s.startDate, s.endDate)}${s.title?' · '+escapeHtml(s.title):''}${s.venue?' · '+escapeHtml(s.venue):''}</div>
       <div class="likes">❤️ ${s.likes||0}</div>
     </div>
     <div class="share-input-row">
@@ -723,17 +724,19 @@ function renderApplyPage(app){
         </div>
         <div class="field"><label>아티스트</label><input type="text" name="artist" required></div>
         <div class="field"><label>카테고리</label>
-          <select name="category" required>
+          <select name="category" id="apply-category" required>
             ${ALL_CATS.map(k=>`<option value="${k}">${CATEGORIES[k].label}</option>`).join('')}
           </select>
         </div>
         <div class="field"><label>일정</label><input type="text" name="name" required></div>
+        <div class="field" id="apply-venue-wrap" style="display:none"><label>공연장</label><input type="text" name="venue" id="apply-venue"></div>
         <div class="field"><label>비고</label><textarea name="note"></textarea></div>
         <button type="submit" class="submit-btn">신청서 제출</button>
       </form>
     </div>
   `;
   setupDateRangeInputs();
+  bindVenueToggle('apply-category', 'apply-venue-wrap');
   document.getElementById('apply-form').addEventListener('submit', async function(e){
     e.preventDefault();
     const fd = new FormData(e.target);
@@ -747,6 +750,7 @@ function renderApplyPage(app){
       artist: fd.get('artist').trim(),
       category: fd.get('category'),
       name: fd.get('name').trim(),
+      venue: fd.get('category')==='concert' ? (fd.get('venue')||'').trim() : '',
       note: (fd.get('note')||'').trim(),
     };
     const submitBtn = e.target.querySelector('.submit-btn');
@@ -756,12 +760,22 @@ function renderApplyPage(app){
       showToast('신청이 접수되었습니다. 감사합니다!');
       e.target.reset();
       setupDateRangeInputs();
+      bindVenueToggle('apply-category', 'apply-venue-wrap');
     }catch(err){
       showToast('신청 접수에 실패했습니다: ' + err.message);
     }finally{
       submitBtn.disabled = false;
     }
   });
+}
+
+/* ---- 콘서트 선택 시에만 공연장 칸 표시 ---- */
+function bindVenueToggle(selectId, wrapId){
+  const sel = document.getElementById(selectId), wrap = document.getElementById(wrapId);
+  if(!sel || !wrap) return;
+  const sync = ()=>{ wrap.style.display = sel.value==='concert' ? '' : 'none'; };
+  sel.onchange = sync;
+  sync();
 }
 
 /* ---- 년/월/일 개별 입력 필드 ---- */

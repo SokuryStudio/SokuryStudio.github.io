@@ -1,5 +1,7 @@
 {
   "rewrites": [
-    { "source": "/manage", "destination": "/manage.html" }
+    { "source": "/manage", "destination": "/manage.html" },
+    { "source": "/s/:id", "destination": "/api/data?resource=share&id=:id" },
+    { "source": "/og/:id", "destination": "/api/data?resource=ogimage&id=:id" }
   ]
 }
