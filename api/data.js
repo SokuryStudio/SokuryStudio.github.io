@@ -96,32 +96,88 @@ async function handleHealth(req, res) {
   });
 }
 
-const ogKey = (id) => `sokury:og:${id}`;
+// ---------------------------------------------------------------------------
+// 공유 카드 이미지: 카톡·디스코드·X가 링크를 읽으러 오는 순간 서버가 직접 그립니다.
+// (메인 페이지 공유 팝업의 카드와 같은 디자인, 1200x630)
+// ---------------------------------------------------------------------------
+const CAT_COLORS = { regular: '#7C5CFC', ep: '#12B886', single: '#228BE6', mixtape: '#F59F00', compilation: '#E64980', physical: '#495057', concert: '#E03131' };
+const HEART_SVG = 'data:image/svg+xml;utf8,' + encodeURIComponent('<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path fill="#E03131" d="M12 21s-7.5-4.6-10-9.3C.3 8.3 2.2 4.5 5.9 4.1 8.1 3.9 10 5 12 7.2 14 5 15.9 3.9 18.1 4.1c3.7.4 5.6 4.2 3.9 7.6C19.5 16.4 12 21 12 21z"/></svg>');
 
-// 관리자 페이지가 그린 공유 카드 이미지(PNG)를 저장(PUT, 관리자) / 제공(GET, 공개)
+function cardVersion(s) {
+  const str = [s.artist, s.title, s.venue, s.startDate, s.endDate, s.category, s.likes || 0].join('|');
+  let h = 5381;
+  for (let i = 0; i < str.length; i++) h = ((h << 5) + h + str.charCodeAt(i)) >>> 0;
+  return h.toString(36);
+}
+function clip(str, max) {
+  const chars = Array.from(String(str || ''));
+  return chars.length > max ? chars.slice(0, max - 1).join('') + '…' : chars.join('');
+}
+async function loadGoogleFont(weight, text) {
+  const url = `https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@${weight}&text=${encodeURIComponent(text)}`;
+  const css = await (await fetch(url)).text();
+  const m = css.match(/src: url\((.+?)\) format\('(opentype|truetype)'\)/);
+  if (!m) throw new Error('폰트를 불러오지 못했습니다.');
+  const r = await fetch(m[1]);
+  if (!r.ok) throw new Error('폰트를 불러오지 못했습니다.');
+  return r.arrayBuffer();
+}
+const el = (type, style, children) => ({ type, props: { style, children } });
+
+async function renderCardPng(s) {
+  const { ImageResponse } = await import('@vercel/og');
+  const label = CATEGORY_LABELS[s.category] || s.category;
+  const color = CAT_COLORS[s.category] || '#6C5CFC';
+  const artist = clip(s.artist, 40);
+  const meta = clip(fmtRange(s.startDate, s.endDate) + (s.title ? ' · ' + s.title : '') + (s.venue ? ' · ' + s.venue : ''), 110);
+  const likes = String(s.likes || 0);
+  const allText = label + artist + meta + likes + 'Sokury…0123456789';
+  const [w500, w700, w900] = await Promise.all([
+    loadGoogleFont(500, allText), loadGoogleFont(700, allText), loadGoogleFont(900, allText),
+  ]);
+
+  const tree = el('div', { width: '100%', height: '100%', display: 'flex', background: '#ffffff', padding: 56, fontFamily: 'Noto Sans KR' }, [
+    el('div', { flex: 1, display: 'flex', flexDirection: 'column', background: '#f0f1f6', border: '2px solid #e3e5ec', borderRadius: 40, padding: '64px 72px 52px' }, [
+      el('div', { display: 'flex', alignSelf: 'flex-start', background: color, color: '#fff', fontSize: 36, fontWeight: 700, borderRadius: 999, padding: '8px 30px' }, label),
+      el('div', { display: 'flex', marginTop: 28, fontSize: 76, fontWeight: 900, color: '#1c1e26', lineHeight: 1.2, maxHeight: 184, overflow: 'hidden' }, artist),
+      el('div', { display: 'flex', marginTop: 18, fontSize: 36, fontWeight: 500, color: '#8b8fa3', lineHeight: 1.45, maxHeight: 158, overflow: 'hidden' }, meta),
+      el('div', { display: 'flex', marginTop: 'auto', justifyContent: 'space-between', alignItems: 'center' }, [
+        el('div', { display: 'flex', alignItems: 'center', fontSize: 36, fontWeight: 700, color: '#E03131' }, [
+          { type: 'img', props: { src: HEART_SVG, width: 38, height: 38, style: { marginRight: 12 } } },
+          likes,
+        ]),
+        el('div', { display: 'flex', fontSize: 36, fontWeight: 900, color: '#6C5CFC' }, 'Sokury'),
+      ]),
+    ]),
+  ]);
+
+  const img = new ImageResponse(tree, {
+    width: 1200, height: 630,
+    fonts: [
+      { name: 'Noto Sans KR', data: w500, weight: 500, style: 'normal' },
+      { name: 'Noto Sans KR', data: w700, weight: 700, style: 'normal' },
+      { name: 'Noto Sans KR', data: w900, weight: 900, style: 'normal' },
+    ],
+  });
+  return Buffer.from(await img.arrayBuffer());
+}
+
 async function handleOgImage(req, res, id) {
-  if (!id) return res.status(400).json({ error: 'id가 필요합니다.' });
-  if (req.method === 'GET') {
-    const b64 = await redis(['GET', ogKey(id)]);
-    if (!b64) return res.status(404).json({ error: '이미지가 없습니다.' });
+  if (req.method !== 'GET' && req.method !== 'HEAD') return res.status(405).json({ error: '지원하지 않는 요청입니다.' });
+  const list = await readList('schedules');
+  const s = id ? list.find((x) => x.id === id) : null;
+  const fallback = `/og-${s ? s.category : 'default'}.png`;
+  if (!s) { res.setHeader('Location', fallback); return res.status(302).end(); }
+  try {
+    const png = await renderCardPng(s);
     res.setHeader('Content-Type', 'image/png');
-    res.setHeader('Cache-Control', 'public, max-age=300, s-maxage=86400');
-    return res.status(200).send(Buffer.from(b64, 'base64'));
+    res.setHeader('Cache-Control', 'public, max-age=600, s-maxage=86400');
+    return res.status(200).send(png);
+  } catch (e) {
+    console.error('카드 이미지 생성 실패:', e && e.message);
+    res.setHeader('Location', fallback); // 실패해도 카테고리 이미지로 미리보기는 뜨도록
+    return res.status(302).end();
   }
-  if (req.method === 'PUT') {
-    const { png } = getBody(req);
-    const m = typeof png === 'string' && png.match(/^data:image\/png;base64,(.+)$/);
-    if (!m) return res.status(400).json({ error: 'PNG 이미지가 아닙니다.' });
-    if (m[1].length > 900000) return res.status(413).json({ error: '이미지가 너무 큽니다.' });
-    const list = await readList('schedules');
-    const s = list.find((x) => x.id === id);
-    if (!s) return res.status(404).json({ error: '일정을 찾을 수 없습니다.' });
-    await redis(['SET', ogKey(id), m[1]]);
-    s.ogVersion = Date.now(); // 카톡 등이 예전 이미지를 계속 보여주지 않도록 버전 표시
-    await writeList('schedules', list);
-    return res.status(200).json({ id, ogVersion: s.ogVersion });
-  }
-  return res.status(405).json({ error: '지원하지 않는 요청입니다.' });
 }
 
 async function handleSchedules(req, res, id, action) {
@@ -170,7 +226,6 @@ async function handleSchedules(req, res, id, action) {
     const next = list.filter((x) => x.id !== id);
     if (next.length === list.length) return res.status(404).json({ error: '일정을 찾을 수 없습니다.' });
     await writeList('schedules', next);
-    await redis(['DEL', ogKey(id)]);
     return res.status(200).json({ deleted: id });
   }
 
@@ -245,9 +300,7 @@ async function handleShare(req, res, id) {
     const cat = CATEGORY_LABELS[s.category] || s.category;
     title = s.title ? `${s.artist} - ${s.title}` : s.artist;
     desc = `[${cat}] ${fmtRange(s.startDate, s.endDate)}${s.venue ? ' · ' + s.venue : ''} · ❤️ ${s.likes || 0}`;
-    image = s.ogVersion
-      ? `${origin}/og/${encodeURIComponent(s.id)}?v=${s.ogVersion}`
-      : `${origin}/og-${s.category}.png`;
+    image = `${origin}/og/${encodeURIComponent(s.id)}?v=${cardVersion(s)}`;
     target = `/#/?schedule=${encodeURIComponent(s.id)}`;
   }
   const shareUrl = `${origin}/s/${encodeURIComponent(id || '')}`;
