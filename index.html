@@ -1,6 +1,6 @@
 <!DOCTYPE html>
 <html lang="ko">
-<head> <meta name="naver-site-verification" content="5426b25a4843ebbcd3735bf6a1d4b7ea7b68710f" />
+<head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Sokury</title>
@@ -19,6 +19,7 @@
 <meta name="twitter:description" content="좋아하는 아티스트의 앨범, LP, 콘서트 일정을 한 눈에">
 <meta name="twitter:image" content="https://www.sokury.kr/og-default.png">
 <meta name="theme-color" content="#6C5CFC">
+<meta name="naver-site-verification" content="5426b25a4843ebbcd3735bf6a1d4b7ea7b68710f" />
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@400;500;700;900&display=swap" rel="stylesheet">
@@ -114,7 +115,14 @@
 
   /* ---- legend ---- */
   .legend{display:flex;flex-wrap:wrap;gap:8px 14px;justify-content:center;margin-bottom:18px;}
-  .legend-item{display:flex;align-items:center;gap:6px;font-size:12px;color:var(--text-dim);font-weight:500;}
+  .legend-item{display:flex;align-items:center;gap:6px;font-size:12px;color:var(--text-dim);font-weight:500;
+    background:none;border:1px solid transparent;border-radius:999px;padding:4px 10px;cursor:pointer;font-family:var(--font);
+    transition:opacity .15s, background .15s, border-color .15s;}
+  .legend-item:hover{background:var(--surface);border-color:var(--border);}
+  .legend.filtering .legend-item{opacity:.35;}
+  .legend.filtering .legend-item.active{opacity:1;background:var(--surface);border-color:var(--border);color:var(--text);font-weight:700;}
+  .legend-reset{font-size:12px;font-weight:700;color:var(--accent);background:none;border:none;cursor:pointer;padding:4px 8px;font-family:var(--font);}
+  .legend-reset:hover{text-decoration:underline;}
   .legend-dot{width:9px;height:9px;border-radius:3px;flex-shrink:0;}
 
   /* ---- calendar grid ---- */
@@ -563,6 +571,13 @@ async function renderRoute(){
 ========================================================= */
 let calState = { year: new Date().getFullYear(), month: new Date().getMonth() }; // month: 0-index
 let panelState = { left: 'all', right: 'all' };
+let calFilter = []; // 캘린더에 보여줄 카테고리. 비어 있으면 전체
+function toggleCalFilter(cat){
+  const i = calFilter.indexOf(cat);
+  if(i > -1) calFilter.splice(i, 1); else calFilter.push(cat);
+  renderMainPage(document.getElementById('app'));
+}
+function resetCalFilter(){ calFilter = []; renderMainPage(document.getElementById('app')); }
 
 function buildCalendarCells(year, month){
   const firstDay = new Date(year, month, 1);
@@ -587,7 +602,7 @@ function renderMainPage(app){
   const schedules = scheduleCache;
   const cells = buildCalendarCells(calState.year, calState.month);
   const byDate = {};
-  schedules.forEach(s=>{
+  schedules.filter(s=> !calFilter.length || calFilter.includes(s.category)).forEach(s=>{
     eachDateInRange(s.startDate, s.endDate).forEach(iso=>{
       (byDate[iso] = byDate[iso]||[]).push(s);
     });
@@ -595,7 +610,7 @@ function renderMainPage(app){
 
   const weekdayNames = ['일','월','화','수','목','금','토'];
   const legendHtml = ALL_CATS.map(k=>`
-    <div class="legend-item"><span class="legend-dot" style="background:${CATEGORIES[k].color}"></span>${CATEGORIES[k].label}</div>
+    <button type="button" class="legend-item ${calFilter.includes(k)?'active':''}" onclick="toggleCalFilter('${k}')" aria-pressed="${calFilter.includes(k)}"><span class="legend-dot" style="background:${CATEGORIES[k].color}"></span>${CATEGORIES[k].label}</button>
   `).join('');
 
   const cellsHtml = cells.map(c=>{
@@ -630,7 +645,7 @@ function renderMainPage(app){
       <button class="cal-nav-btn" onclick="shiftMonth(1)">›</button>
       <button class="cal-today-btn" onclick="goToday()">오늘</button>
     </div>
-    <div class="legend">${legendHtml}</div>
+    <div class="legend ${calFilter.length?'filtering':''}">${legendHtml}${calFilter.length?'<button type="button" class="legend-reset" onclick="resetCalFilter()">전체 보기</button>':''}</div>
     <div class="cal-wrap">
       <div class="cal-weekdays">${weekdayNames.map(w=>`<div>${w}</div>`).join('')}</div>
       <div class="cal-grid">${cellsHtml}</div>
