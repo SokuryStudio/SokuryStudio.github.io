@@ -292,8 +292,8 @@ async function handleShare(req, res, id) {
   const list = await readList('schedules');
   const s = id ? list.find((x) => x.id === id) : null;
 
-  let title = 'Sokury — 컴백 · 콘서트 캘린더';
-  let desc = '아티스트들의 앨범 발매와 콘서트 일정을 한눈에.';
+  let title = 'Sokury';
+  let desc = '좋아하는 아티스트의 앨범, LP, 콘서트 일정을 한 눈에';
   let image = `${origin}/og-default.png`;
   let target = '/';
   if (s) {
