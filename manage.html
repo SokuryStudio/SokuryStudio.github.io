@@ -137,7 +137,7 @@
     <span class="site-title">Sokury</span>
     <span class="badge-admin">ADMIN</span>
   </div>
-  <div class="topbar-right">관리자 전용 페이지</div>
+  <div class="topbar-right"><a href="/" style="color:var(--text-dim);font-weight:700;text-decoration:none">← 사이트로</a></div>
 </div>
 
 <main id="app"></main>
@@ -486,6 +486,7 @@ function openApplicationModal(id){
       <div class="modal-row"><span class="modal-label">카테고리</span><span class="modal-value">${escapeHtml(cat.label)}</span></div>
       <div class="modal-row"><span class="modal-label">신청자</span><span class="modal-value">${escapeHtml(a.name)}</span></div>
       ${a.venue?`<div class="modal-row"><span class="modal-label">공연장</span><span class="modal-value">${escapeHtml(a.venue)}</span></div>`:''}
+      <div class="modal-row"><span class="modal-label">신청 계정</span><span class="modal-value small">${a.ownerEmail?escapeHtml(a.ownerEmail):'로그인 없이 신청'}</span></div>
       ${a.note?`<div class="modal-row"><span class="modal-label">비고</span><span class="modal-value small">${escapeHtml(a.note)}</span></div>`:''}
     </div>
     <div class="modal-form-actions">

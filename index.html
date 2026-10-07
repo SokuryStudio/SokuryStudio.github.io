@@ -21,6 +21,7 @@
 <meta name="theme-color" content="#6C5CFC">
 <meta name="naver-site-verification" content="5426b25a4843ebbcd3735bf6a1d4b7ea7b68710f" />
 <meta name="google-site-verification" content="iZpWi52MMQhVfnNFhfhrj9i3PdsjxlZ8xvjvI_5agd8" />
+<script src="https://accounts.google.com/gsi/client" async defer></script>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@400;500;700;900&display=swap" rel="stylesheet">
@@ -113,6 +114,28 @@
     font-size:13px;font-weight:700;color:var(--text-dim);
   }
   .cal-today-btn:hover{color:var(--accent);border-color:var(--accent);}
+
+  /* ---- 로그인 ---- */
+  .topbar-right{display:flex;align-items:center;gap:8px;}
+  .login-btn{padding:8px 16px;border-radius:999px;border:none;background:var(--accent);color:#fff;font-weight:700;font-size:13px;font-family:var(--font);cursor:pointer;}
+  .login-btn:hover{opacity:.9;}
+  .user-chip{display:flex;align-items:center;gap:8px;font-size:13px;font-weight:700;color:var(--text);}
+  .user-chip img{width:28px;height:28px;border-radius:50%;object-fit:cover;background:var(--surface-2);}
+  .user-chip .name{max-width:110px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+  .logout-btn{background:none;border:none;color:var(--text-faint);font-size:12px;cursor:pointer;font-family:var(--font);padding:4px;}
+  .logout-btn:hover{color:var(--danger);}
+  @media (max-width:520px){ .user-chip .name{display:none;} }
+  .login-hint{font-size:12px;color:var(--text-dim);background:var(--accent-soft);border-radius:10px;padding:10px 12px;margin:0 0 18px;line-height:1.6;}
+  .login-hint button{background:none;border:none;color:var(--accent);font-weight:700;cursor:pointer;padding:0;font-size:12px;font-family:var(--font);text-decoration:underline;}
+  #g-btn{display:flex;justify-content:center;min-height:44px;margin:6px 0 4px;}
+  .my-list{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:10px;}
+  .my-item{display:flex;gap:12px;align-items:flex-start;padding:14px;border-radius:12px;background:var(--surface-2);}
+  .my-item .info{flex:1;min-width:0;}
+  .my-item .t1{font-size:14px;font-weight:700;}
+  .my-item .t2{font-size:12px;color:var(--text-faint);margin-top:3px;line-height:1.5;}
+  .my-status{font-size:11px;font-weight:800;padding:4px 10px;border-radius:999px;white-space:nowrap;}
+  .my-status.pending{background:#fff3bf;color:#997404;}
+  .my-status.uploaded{background:#d3f9d8;color:#2b8a3e;}
 
   /* ---- legend ---- */
   .legend{display:flex;flex-wrap:wrap;gap:8px 14px;justify-content:center;margin-bottom:18px;}
@@ -314,10 +337,13 @@
     <nav>
       <a href="#/" data-route="/">메인</a>
       <a href="#/apply" data-route="/apply">신청</a>
+      <a href="#/my" data-route="/my" id="nav-my" style="display:none">내 신청</a>
+      <a href="/manage" id="nav-manage" style="display:none">관리</a>
     </nav>
   </div>
   <div class="topbar-right">
     <a href="#" class="support-link" title="후원 링크 준비중" onclick="return false;">후원</a>
+    <div id="auth-area"></div>
   </div>
 </div>
 
@@ -552,7 +578,7 @@ function renderNav(path){
   });
 }
 window.addEventListener('hashchange', renderRoute);
-window.addEventListener('DOMContentLoaded', renderRoute);
+window.addEventListener('DOMContentLoaded', async ()=>{ await initAuth(); renderRoute(); });
 
 async function renderRoute(){
   const { path, params } = parseHash();
@@ -560,6 +586,18 @@ async function renderRoute(){
   const app = document.getElementById('app');
   if(path.startsWith('/apply')){
     renderApplyPage(app);
+    return;
+  }
+  if(path.startsWith('/my')){
+    renderMyPage(app);
+    return;
+  }
+  if(path.startsWith('/login')){
+    const next = params.get('next');
+    if(currentUser && next){ location.href = next; return; }
+    await refreshSchedules();
+    renderMainPage(app);
+    openLoginModal(next);
     return;
   }
   await refreshSchedules();
@@ -734,6 +772,9 @@ function renderApplyPage(app){
   app.innerHTML = `
     <div class="form-card">
       <h2>일정 신청</h2>
+      ${currentUser
+        ? `<p class="login-hint"><b>${escapeHtml(currentUser.email)}</b> 계정으로 신청돼요. 진행 상황은 <a href="#/my">내 신청</a>에서 확인할 수 있어요.</p>`
+        : `<p class="login-hint"><button type="button" onclick="openLoginModal()">로그인</button>하고 신청하면 '내 신청'에서 진행 상황을 확인할 수 있어요.</p>`}
       <form id="apply-form">
         <div class="field">
           <label>시작일</label>
@@ -798,6 +839,122 @@ function renderApplyPage(app){
       submitBtn.disabled = false;
     }
   });
+}
+
+
+/* =========================================================
+   구글 로그인
+========================================================= */
+let currentUser = null;
+let googleClientId = null;
+let loginNext = null;
+
+async function initAuth(){
+  try{
+    const [cfg, me] = await Promise.all([apiCall('resource=config'), apiCall('resource=auth')]);
+    googleClientId = cfg.googleClientId;
+    currentUser = me.user;
+  }catch(e){ currentUser = null; }
+  renderAuthArea();
+}
+
+function renderAuthArea(){
+  const area = document.getElementById('auth-area');
+  if(!area) return;
+  if(currentUser){
+    const pic = currentUser.picture ? `<img src="${escapeHtml(currentUser.picture)}" alt="" referrerpolicy="no-referrer">` : '';
+    area.innerHTML = `<div class="user-chip">${pic}<span class="name">${escapeHtml(currentUser.name||currentUser.email)}</span>
+      <button class="logout-btn" onclick="logout()">로그아웃</button></div>`;
+  } else {
+    area.innerHTML = `<button class="login-btn" onclick="openLoginModal()">로그인</button>`;
+  }
+  document.getElementById('nav-my').style.display = currentUser ? '' : 'none';
+  document.getElementById('nav-manage').style.display = (currentUser && currentUser.isAdmin) ? '' : 'none';
+}
+
+function waitForGoogle(timeout){
+  return new Promise((resolve)=>{
+    const t0 = Date.now();
+    (function check(){
+      if(window.google && google.accounts && google.accounts.id) return resolve(true);
+      if(Date.now() - t0 > timeout) return resolve(false);
+      setTimeout(check, 100);
+    })();
+  });
+}
+
+async function openLoginModal(next){
+  loginNext = next || null;
+  openModal(`
+    <div class="modal-tag" style="background:var(--accent)">로그인</div>
+    <div class="modal-rows"><div class="modal-row"><span class="modal-value small">구글 계정으로 로그인하면 내가 신청한 일정의 진행 상황을 확인할 수 있어요.</span></div></div>
+    <div id="g-btn"></div>
+    <p class="hint" id="login-msg" style="font-size:12px;color:var(--text-faint);text-align:center;margin:8px 0 0;"></p>
+  `);
+  const msg = document.getElementById('login-msg');
+  if(!googleClientId){ msg.textContent = '구글 로그인이 아직 설정되지 않았습니다.'; return; }
+  if(!(await waitForGoogle(5000))){ msg.textContent = '구글 로그인을 불러오지 못했습니다. 잠시 후 다시 시도해주세요.'; return; }
+  google.accounts.id.initialize({ client_id: googleClientId, callback: onGoogleCredential });
+  const box = document.getElementById('g-btn');
+  if(box) google.accounts.id.renderButton(box, { theme:'outline', size:'large', shape:'pill', text:'signin_with', locale:'ko' });
+}
+
+async function onGoogleCredential(response){
+  try{
+    const r = await apiCall('resource=auth&action=login', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ credential: response.credential }) });
+    currentUser = r.user;
+    closeModal();
+    renderAuthArea();
+    showToast(`${currentUser.name || currentUser.email}님, 환영해요!`);
+    if(loginNext){ location.href = loginNext; return; }
+    if(location.hash.startsWith('#/login')) location.hash = '#/';
+    else renderRoute();
+  }catch(e){
+    const msg = document.getElementById('login-msg');
+    if(msg) msg.textContent = '로그인 실패: ' + e.message;
+  }
+}
+
+async function logout(){
+  try{ await apiCall('resource=auth&action=logout', { method:'POST' }); }catch(e){}
+  currentUser = null;
+  if(window.google && google.accounts && google.accounts.id) google.accounts.id.disableAutoSelect();
+  renderAuthArea();
+  showToast('로그아웃했어요.');
+  if(location.hash.startsWith('#/my')) location.hash = '#/'; else renderRoute();
+}
+
+/* ---- 내 신청 ---- */
+async function renderMyPage(app){
+  if(!currentUser){
+    app.innerHTML = `<div class="form-card" style="text-align:center">
+      <h2>내 신청</h2>
+      <p class="sub" style="margin-top:10px">로그인하면 내가 신청한 일정의 진행 상황을 볼 수 있어요.</p>
+      <button class="submit-btn" onclick="openLoginModal()">구글로 로그인</button>
+    </div>`;
+    return;
+  }
+  app.innerHTML = `<div class="form-card"><h2>내 신청</h2><p class="sub">불러오는 중…</p></div>`;
+  let list;
+  try{ list = await apiCall('resource=myapplications'); }
+  catch(e){ app.innerHTML = `<div class="form-card"><h2>내 신청</h2><p class="sub">불러오지 못했습니다: ${escapeHtml(e.message)}</p></div>`; return; }
+  const rows = list.map(a=>{
+    const cat = CATEGORIES[a.category] || {label:a.category, color:'#888'};
+    const status = a.status==='uploaded' ? '<span class="my-status uploaded">등록 완료</span>' : '<span class="my-status pending">검토 중</span>';
+    return `<li class="my-item">
+      <span class="tag" style="background:${cat.color};color:#fff;font-size:10px;font-weight:700;padding:3px 8px;border-radius:999px;white-space:nowrap">${escapeHtml(cat.label)}</span>
+      <div class="info">
+        <div class="t1">${escapeHtml(a.artist)} · ${escapeHtml(a.name)}</div>
+        <div class="t2">${fmtDateRangeKR(a.startDate, a.endDate)}${a.venue?' · '+escapeHtml(a.venue):''}<br>신청일 ${fmtDateKR(fmtDateISO(new Date(a.createdAt)))}</div>
+      </div>
+      ${status}
+    </li>`;
+  }).join('');
+  app.innerHTML = `<div class="form-card">
+    <h2>내 신청</h2>
+    <p class="sub">${list.length ? `총 ${list.length}건` : '아직 신청한 일정이 없어요.'}</p>
+    ${list.length ? `<ul class="my-list">${rows}</ul>` : `<a href="#/apply" class="submit-btn" style="display:block;text-align:center;text-decoration:none">일정 신청하러 가기</a>`}
+  </div>`;
 }
 
 /* ---- 콘서트 선택 시에만 공연장 칸 표시 ---- */
