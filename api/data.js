@@ -92,6 +92,8 @@ async function handleHealth(req, res) {
     dbVia: cfg ? cfg.via : null,
     dbError: pingError,
     adminConfigured: Boolean(process.env.ADMIN_USER && process.env.ADMIN_PASSWORD),
+    googleLoginConfigured: Boolean(process.env.GOOGLE_CLIENT_ID && process.env.SESSION_SECRET),
+    adminEmailCount: adminEmails().length,
     envNamesFound: envNames, // 값은 절대 보여주지 않고 이름만 보여줍니다
   });
 }
@@ -180,6 +182,95 @@ async function handleOgImage(req, res, id) {
   }
 }
 
+
+// ---------------------------------------------------------------------------
+// 구글 로그인 / 세션
+//   - 브라우저가 구글 로그인 후 받은 ID 토큰을 구글에 직접 검증받고,
+//     서명된 세션 쿠키(sokury_session)를 발급합니다. (값 위조 불가, JS에서 읽을 수 없음)
+//   - 관리자 여부: Vercel 환경변수 ADMIN_EMAILS(쉼표로 구분)에 있는 이메일인지로 판단
+// ---------------------------------------------------------------------------
+const crypto = require('crypto');
+const SESSION_COOKIE = 'sokury_session';
+const SESSION_DAYS = 30;
+
+function adminEmails() {
+  return (process.env.ADMIN_EMAILS || '').split(',').map((e) => e.trim().toLowerCase()).filter(Boolean);
+}
+function isAdminEmail(email) {
+  return !!email && adminEmails().includes(String(email).toLowerCase());
+}
+function signSession(payload) {
+  const secret = process.env.SESSION_SECRET;
+  if (!secret) { const e = new Error('SESSION_SECRET 환경변수가 없습니다.'); e.status = 500; throw e; }
+  const body = Buffer.from(JSON.stringify(payload)).toString('base64url');
+  const sig = crypto.createHmac('sha256', secret).update(body).digest('base64url');
+  return `${body}.${sig}`;
+}
+function readSession(req) {
+  const secret = process.env.SESSION_SECRET;
+  const raw = (req.headers && req.headers.cookie) || '';
+  const m = raw.match(new RegExp('(?:^|;\\s*)' + SESSION_COOKIE + '=([^;]+)'));
+  if (!secret || !m) return null;
+  const [body, sig] = m[1].split('.');
+  if (!body || !sig) return null;
+  const expected = crypto.createHmac('sha256', secret).update(body).digest('base64url');
+  const a = Buffer.from(sig), b = Buffer.from(expected);
+  if (a.length !== b.length || !crypto.timingSafeEqual(a, b)) return null;
+  try {
+    const p = JSON.parse(Buffer.from(body, 'base64url').toString('utf8'));
+    if (!p.exp || p.exp < Date.now()) return null;
+    return p;
+  } catch (e) { return null; }
+}
+function publicUser(p) {
+  return p ? { email: p.email, name: p.name, picture: p.picture, isAdmin: isAdminEmail(p.email) } : null;
+}
+
+async function handleConfig(req, res) {
+  return res.status(200).json({ googleClientId: process.env.GOOGLE_CLIENT_ID || null });
+}
+
+async function handleAuth(req, res, action) {
+  if (req.method === 'GET') return res.status(200).json({ user: publicUser(readSession(req)) });
+
+  if (req.method === 'POST' && action === 'logout') {
+    res.setHeader('Set-Cookie', `${SESSION_COOKIE}=; Path=/; HttpOnly; Secure; SameSite=Lax; Max-Age=0`);
+    return res.status(200).json({ user: null });
+  }
+
+  if (req.method === 'POST' && action === 'login') {
+    const clientId = process.env.GOOGLE_CLIENT_ID;
+    if (!clientId) return res.status(500).json({ error: 'GOOGLE_CLIENT_ID 환경변수가 없습니다.' });
+    const { credential } = getBody(req);
+    if (!credential) return res.status(400).json({ error: '로그인 정보가 없습니다.' });
+    // 구글에 토큰이 진짜인지 직접 확인
+    const r = await fetch('https://oauth2.googleapis.com/tokeninfo?id_token=' + encodeURIComponent(credential));
+    const t = await r.json().catch(() => ({}));
+    const validIss = t.iss === 'accounts.google.com' || t.iss === 'https://accounts.google.com';
+    if (!r.ok || t.aud !== clientId || !validIss || String(t.email_verified) !== 'true' || Number(t.exp) * 1000 < Date.now()) {
+      return res.status(401).json({ error: '구글 로그인 확인에 실패했습니다.' });
+    }
+    const payload = {
+      sub: t.sub, email: t.email, name: t.name || t.email, picture: t.picture || '',
+      exp: Date.now() + SESSION_DAYS * 86400000,
+    };
+    res.setHeader('Set-Cookie', `${SESSION_COOKIE}=${signSession(payload)}; Path=/; HttpOnly; Secure; SameSite=Lax; Max-Age=${SESSION_DAYS * 86400}`);
+    return res.status(200).json({ user: publicUser(payload) });
+  }
+
+  return res.status(405).json({ error: '지원하지 않는 요청입니다.' });
+}
+
+// 로그인한 사람이 자기 신청 내역만 조회
+async function handleMyApplications(req, res) {
+  const me = readSession(req);
+  if (!me) return res.status(401).json({ error: '로그인이 필요합니다.' });
+  const list = await readList('applications');
+  const mine = list.filter((a) => a.ownerSub === me.sub).sort((a, b) => b.createdAt - a.createdAt)
+    .map(({ ownerSub, ...rest }) => rest);
+  return res.status(200).json(mine);
+}
+
 async function handleSchedules(req, res, id, action) {
   const m = req.method;
 
@@ -245,7 +336,9 @@ async function handleApplications(req, res, id) {
       return res.status(400).json({ error: '시작일, 종료일, 아티스트, 카테고리, 일정은 필수입니다.' });
     }
     const list = await readList('applications');
+    const me = readSession(req);
     const item = { id: uid('a'), startDate, endDate, artist, category, name, venue: venue || '', note: note || '', status: 'pending', createdAt: Date.now() };
+    if (me) { item.ownerSub = me.sub; item.ownerEmail = me.email; }
     list.push(item);
     await writeList('applications', list);
     return res.status(201).json(item);
@@ -344,6 +437,9 @@ module.exports = async function handler(req, res) {
     const action = q.action || null;
 
     if (resource === 'health') return await handleHealth(req, res);
+    if (resource === 'config') return await handleConfig(req, res);
+    if (resource === 'auth') return await handleAuth(req, res, action);
+    if (resource === 'myapplications') return await handleMyApplications(req, res);
     if (resource === 'share') return await handleShare(req, res, id);
     if (resource === 'ogimage') return await handleOgImage(req, res, id);
     if (resource === 'schedules') return await handleSchedules(req, res, id, action);
