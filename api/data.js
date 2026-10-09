@@ -349,7 +349,15 @@ async function handleApplications(req, res, id) {
     const a = list.find((x) => x.id === id);
     if (!a) return res.status(404).json({ error: '신청을 찾을 수 없습니다.' });
     const { status } = getBody(req);
-    if (status) a.status = status;
+    if (!['pending', 'uploaded', 'rejected'].includes(status)) {
+      return res.status(400).json({ error: '올바르지 않은 상태입니다.' });
+    }
+    // 업로드/거절은 '대기' 상태에서만 가능 (이미 처리된 신청을 또 처리하는 것 방지)
+    if (status !== 'pending' && a.status !== 'pending') {
+      return res.status(409).json({ error: '이미 처리된 신청입니다.' });
+    }
+    a.status = status;
+    a.handledAt = status === 'pending' ? null : Date.now();
     await writeList('applications', list);
     return res.status(200).json(a);
   }
