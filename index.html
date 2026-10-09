@@ -171,8 +171,6 @@
   .cal-bar{z-index:2;margin:1px 4px;height:20px;border:none;border-radius:5px;color:#fff;font-size:10px;font-weight:700;
     text-align:left;padding:0 6px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;font-family:var(--font);cursor:pointer;min-width:0;}
   .cal-bar:hover{filter:brightness(1.08);}
-  .cal-bar.cont-l{margin-left:0;border-top-left-radius:0;border-bottom-left-radius:0;}
-  .cal-bar.cont-r{margin-right:0;border-top-right-radius:0;border-bottom-right-radius:0;}
   .cal-bar.faded{opacity:.55;}
   .cal-more{z-index:2;margin:1px 4px;}
   .legend-sep{width:1px;height:18px;background:var(--border);align-self:center;}
@@ -743,7 +741,7 @@ function renderMainPage(app){
       const cat = CATEGORIES[g.s.category];
       const span = g.c1 - g.c0 + 1;
       const allOther = days.slice(g.c0, g.c1+1).every(c=>c.other);
-      html += `<button class="cal-bar ${g.contL?'cont-l':''} ${g.contR?'cont-r':''} ${allOther?'faded':''}"
+      html += `<button class="cal-bar ${allOther?'faded':''}"
         style="grid-column:${g.c0+1} / span ${span};grid-row:${3+g.lane};background:${cat.color}"
         title="${escapeHtml(g.s.artist)}${g.s.title?' · '+escapeHtml(g.s.title):''}" onclick="openScheduleModal('${g.s.id}')">${escapeHtml(g.s.artist)}</button>`;
     });
