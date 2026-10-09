@@ -41,6 +41,18 @@
     background:var(--surface);border-bottom:1px solid var(--border);position:sticky;top:0;z-index:50;flex-wrap:wrap;gap:10px;
   }
   .topbar-left{display:flex;align-items:center;gap:12px;}
+  .admin-nav{display:flex;gap:4px;margin-left:10px;}
+  .admin-nav a{padding:8px 14px;border-radius:999px;font-weight:700;font-size:14px;color:var(--text-dim);text-decoration:none;transition:background .15s,color .15s;}
+  .admin-nav a:hover{background:var(--accent-soft);color:var(--accent);}
+  #auth-area{display:flex;align-items:center;gap:8px;}
+  .user-chip{display:flex;align-items:center;gap:8px;font-size:13px;font-weight:700;color:var(--text);}
+  .user-chip img{width:28px;height:28px;border-radius:50%;object-fit:cover;background:var(--surface-2);}
+  .user-chip .name{max-width:160px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+  .logout-btn{background:none;border:none;color:var(--text-faint);font-size:12px;cursor:pointer;font-family:var(--font);padding:4px;}
+  .logout-btn:hover{color:var(--danger);}
+  .login-btn{display:inline-block;padding:8px 16px;border-radius:999px;background:var(--accent);color:#fff;font-weight:700;font-size:13px;text-decoration:none;}
+  .pw-note{font-size:12px;color:var(--text-faint);}
+  @media (max-width:520px){ .user-chip .name{display:none;} .admin-nav{margin-left:0;} }
   .site-title{font-weight:900;font-size:20px;letter-spacing:-0.5px;color:var(--accent);}
   .badge-admin{font-size:11px;font-weight:800;color:#fff;background:var(--accent);padding:3px 10px;border-radius:999px;}
   .topbar-right{font-size:12px;color:var(--text-faint);}
@@ -86,6 +98,8 @@
   .status-badge{font-size:10px;font-weight:800;padding:3px 9px;border-radius:999px;}
   .status-badge.pending{background:#fff3bf;color:#997404;}
   .status-badge.uploaded{background:#d3f9d8;color:#2b8a3e;}
+  .status-badge.rejected{background:#ffe3e3;color:#c92a2a;}
+  .handled-note{font-size:12px;color:var(--text-faint);margin-right:auto;align-self:center;}
   .row-actions{display:flex;gap:6px;}
   .row-actions button{padding:5px 10px;border-radius:7px;border:1px solid var(--border);background:var(--surface-2);font-size:11px;font-weight:700;color:var(--text-dim);}
   .row-actions button:hover{border-color:var(--accent);color:var(--accent);}
@@ -136,8 +150,9 @@
   <div class="topbar-left">
     <span class="site-title">Sokury</span>
     <span class="badge-admin">ADMIN</span>
+    <nav class="admin-nav"><a href="/">메인</a></nav>
   </div>
-  <div class="topbar-right"><a href="/" style="color:var(--text-dim);font-weight:700;text-decoration:none">← 사이트로</a></div>
+  <div class="topbar-right" id="auth-area"></div>
 </div>
 
 <main id="app"></main>
@@ -154,8 +169,8 @@ const CATEGORIES = {
   single:      { label:'싱글',      color:'var(--cat-single)' },
   mixtape:     { label:'믹스테잎',  color:'var(--cat-mixtape)' },
   compilation: { label:'컴필레이션',color:'var(--cat-compilation)' },
-  physical:    { label:'피지컬',    color:'var(--cat-physical)' },
   concert:     { label:'콘서트',    color:'var(--cat-concert)' },
+  physical:    { label:'피지컬',    color:'var(--cat-physical)' },
 };
 const ALL_CATS = Object.keys(CATEGORIES);
 
@@ -305,6 +320,7 @@ document.addEventListener('keydown', e=>{ if(e.key==='Escape') closeModal(); });
 ========================================================= */
 let adminTab = 'schedules';
 let adminAppFilter = 'all';
+const APP_STATUS = { pending:'대기', uploaded:'완료', rejected:'거절' };
 
 async function render(){
   const app = document.getElementById('app');
@@ -326,15 +342,21 @@ async function render(){
     </div>
     <div class="admin-top">
       <div class="admin-tabs">
-        <button class="admin-tab-btn ${adminTab==='schedules'?'active':''}" onclick="setTab('schedules')">일정 관리</button>
-        <button class="admin-tab-btn ${adminTab==='applications'?'active':''}" onclick="setTab('applications')">신청 내역</button>
+        <button class="admin-tab-btn ${adminTab==='schedules'?'active':''}" data-tab="schedules" onclick="setTab('schedules')">일정 관리</button>
+        <button class="admin-tab-btn ${adminTab==='applications'?'active':''}" data-tab="applications" onclick="setTab('applications')">신청 내역</button>
       </div>
     </div>
     <div id="admin-body"></div>
   `;
   renderBody();
 }
-function setTab(t){ adminTab=t; renderBody(); }
+function setTab(t){
+  adminTab=t;
+  document.querySelectorAll('.admin-tab-btn').forEach(b=>{
+    b.classList.toggle('active', b.getAttribute('data-tab')===t);
+  });
+  renderBody();
+}
 function renderBody(){
   const body = document.getElementById('admin-body');
   if(!body) return;
@@ -367,7 +389,7 @@ function renderSchedules(body){
     </div>
     <div class="data-table-wrap">
       <table class="data-table">
-        <thead><tr><th>기간</th><th>아티스트</th><th>카테고리</th><th>제목</th><th>좋아요</th><th>관리</th></tr></thead>
+        <thead><tr><th>기간</th><th>아티스트</th><th>카테고리</th><th>일정</th><th>좋아요</th><th>관리</th></tr></thead>
         <tbody>${rows || `<tr><td colspan="6" class="empty-table">등록된 일정이 없습니다.</td></tr>`}</tbody>
       </table>
     </div>`;
@@ -378,13 +400,13 @@ function openScheduleForm(id){
     <div class="modal-tag" style="background:var(--accent)">${s?'일정 수정':'새 일정 추가'}</div>
     <div class="modal-form-grid">
       ${dateRangeFieldsHtml(s?s.startDate:'', s?s.endDate:'')}
-      <div class="field"><label>아티스트</label><input type="text" id="f-artist" value="${s?escapeHtml(s.artist):''}" placeholder="아티스트명"></div>
+      <div class="field"><label>아티스트</label><input type="text" id="f-artist" value="${s?escapeHtml(s.artist):''}"></div>
       <div class="field"><label>카테고리</label>
         <select id="f-category">${ALL_CATS.map(k=>`<option value="${k}" ${s&&s.category===k?'selected':''}>${CATEGORIES[k].label}</option>`).join('')}</select>
       </div>
-      <div class="field"><label>제목 (선택)</label><input type="text" id="f-title" value="${s?escapeHtml(s.title||''):''}" placeholder="앨범명 / 공연명 등"></div>
-      <div class="field" id="f-venue-wrap" style="display:none"><label>공연장</label><input type="text" id="f-venue" value="${s?escapeHtml(s.venue||''):''}" placeholder="예: 올림픽공원 KSPO DOME"></div>
-      <div class="field"><label>비고 (선택)</label><textarea id="f-note" placeholder="추가 정보">${s?escapeHtml(s.note||''):''}</textarea></div>
+      <div class="field"><label>일정</label><input type="text" id="f-title" value="${s?escapeHtml(s.title||''):''}"></div>
+      <div class="field" id="f-venue-wrap" style="display:none"><label>공연장</label><input type="text" id="f-venue" value="${s?escapeHtml(s.venue||''):''}"></div>
+      <div class="field"><label>비고</label><textarea id="f-note">${s?escapeHtml(s.note||''):''}</textarea></div>
     </div>
     <div class="modal-form-actions">
       <button class="btn-ghost" onclick="closeModal()">취소</button>
@@ -405,6 +427,7 @@ async function saveScheduleForm(id){
   if(!startDate){ showToast('시작일을 올바르게 입력해주세요.'); return; }
   if(!endDate){ showToast('종료일을 올바르게 입력해주세요.'); return; }
   if(!artist){ showToast('아티스트는 필수입니다.'); return; }
+  if(!title){ showToast('일정을 입력해주세요.'); return; }
   if(endDate < startDate){ showToast('종료일이 시작일보다 빠를 수 없습니다.'); return; }
   const btn = document.getElementById('schedule-save-btn');
   if(btn) btn.disabled = true;
@@ -448,7 +471,7 @@ function renderApplications(body){
   const rows = list.map(a=>{
     const cat = CATEGORIES[a.category]||{label:a.category,color:'#888'};
     return `<tr class="clickable" onclick="openApplicationModal('${a.id}')">
-      <td><span class="status-badge ${a.status}">${a.status==='pending'?'대기':'완료'}</span></td>
+      <td><span class="status-badge ${a.status}">${APP_STATUS[a.status]||a.status}</span></td>
       <td>${fmtDateRangeKR(a.startDate, a.endDate)}</td>
       <td>${escapeHtml(a.artist)}</td>
       <td><span class="table-cat-tag" style="background:${cat.color}">${escapeHtml(cat.label)}</span></td>
@@ -463,13 +486,14 @@ function renderApplications(body){
           <option value="all" ${adminAppFilter==='all'?'selected':''}>전체</option>
           <option value="pending" ${adminAppFilter==='pending'?'selected':''}>대기</option>
           <option value="uploaded" ${adminAppFilter==='uploaded'?'selected':''}>완료</option>
+          <option value="rejected" ${adminAppFilter==='rejected'?'selected':''}>거절</option>
         </select>
       </div>
       <div></div>
     </div>
     <div class="data-table-wrap">
       <table class="data-table">
-        <thead><tr><th>상태</th><th>기간</th><th>아티스트</th><th>카테고리</th><th>신청자</th><th>관리</th></tr></thead>
+        <thead><tr><th>상태</th><th>기간</th><th>아티스트</th><th>카테고리</th><th>일정</th><th>관리</th></tr></thead>
         <tbody>${rows || `<tr><td colspan="6" class="empty-table">신청 내역이 없습니다.</td></tr>`}</tbody>
       </table>
     </div>`;
@@ -479,24 +503,32 @@ function openApplicationModal(id){
   if(!a) return;
   const cat = CATEGORIES[a.category]||{label:a.category,color:'#888'};
   openModal(`
-    <div class="modal-tag" style="background:${cat.color}">${a.status==='pending'?'대기중 신청':'업로드 완료'}</div>
+    <div class="modal-tag" style="background:${a.status==='pending'?cat.color:(a.status==='uploaded'?'#2b8a3e':'#c92a2a')}">${{pending:'대기중 신청',uploaded:'업로드 완료',rejected:'거절됨'}[a.status]||a.status}</div>
     <div class="modal-rows">
       <div class="modal-row"><span class="modal-label">기간</span><span class="modal-value">${fmtDateRangeKR(a.startDate, a.endDate)}</span></div>
       <div class="modal-row"><span class="modal-label">아티스트</span><span class="modal-value">${escapeHtml(a.artist)}</span></div>
       <div class="modal-row"><span class="modal-label">카테고리</span><span class="modal-value">${escapeHtml(cat.label)}</span></div>
-      <div class="modal-row"><span class="modal-label">신청자</span><span class="modal-value">${escapeHtml(a.name)}</span></div>
+      <div class="modal-row"><span class="modal-label">일정</span><span class="modal-value">${escapeHtml(a.name)}</span></div>
       ${a.venue?`<div class="modal-row"><span class="modal-label">공연장</span><span class="modal-value">${escapeHtml(a.venue)}</span></div>`:''}
       <div class="modal-row"><span class="modal-label">신청 계정</span><span class="modal-value small">${a.ownerEmail?escapeHtml(a.ownerEmail):'로그인 없이 신청'}</span></div>
       ${a.note?`<div class="modal-row"><span class="modal-label">비고</span><span class="modal-value small">${escapeHtml(a.note)}</span></div>`:''}
     </div>
     <div class="modal-form-actions">
-      <button class="btn-ghost" onclick="closeModal()">닫기</button>
-      <button class="btn-primary" onclick="openUploadFromApplication('${a.id}')">업로드</button>
+      ${a.status==='pending' ? `
+        <button class="btn-ghost" onclick="closeModal()">닫기</button>
+        <button class="btn-danger" onclick="confirmRejectApplication('${a.id}')">거절</button>
+        <button class="btn-primary" onclick="openUploadFromApplication('${a.id}')">업로드</button>
+      ` : `
+        <span class="handled-note">이미 처리된 신청이에요.</span>
+        <button class="btn-ghost" onclick="revertApplication('${a.id}')">대기로 되돌리기</button>
+        <button class="btn-primary" onclick="closeModal()">닫기</button>
+      `}
     </div>`);
 }
 function openUploadFromApplication(appId){
   const a = applicationCache.find(x=>x.id===appId);
   if(!a) return;
+  if(a.status !== 'pending'){ showToast('이미 처리된 신청이에요.'); return; }
   openModal(`
     <div class="modal-tag" style="background:var(--accent)">일정으로 업로드</div>
     <div class="modal-form-grid">
@@ -505,9 +537,9 @@ function openUploadFromApplication(appId){
       <div class="field"><label>카테고리</label>
         <select id="f-category">${ALL_CATS.map(k=>`<option value="${k}" ${a.category===k?'selected':''}>${CATEGORIES[k].label}</option>`).join('')}</select>
       </div>
-      <div class="field"><label>제목 (선택)</label><input type="text" id="f-title" placeholder="앨범명 / 공연명 등"></div>
-      <div class="field" id="f-venue-wrap" style="display:none"><label>공연장</label><input type="text" id="f-venue" value="${escapeHtml(a.venue||'')}" placeholder="예: 올림픽공원 KSPO DOME"></div>
-      <div class="field"><label>비고 (선택)</label><textarea id="f-note">${escapeHtml(a.note||'')}</textarea></div>
+      <div class="field"><label>일정</label><input type="text" id="f-title" value="${escapeHtml(a.name||'')}"></div>
+      <div class="field" id="f-venue-wrap" style="display:none"><label>공연장</label><input type="text" id="f-venue" value="${escapeHtml(a.venue||'')}"></div>
+      <div class="field"><label>비고</label><textarea id="f-note">${escapeHtml(a.note||'')}</textarea></div>
     </div>
     <div class="modal-form-actions">
       <button class="btn-ghost" onclick="closeModal()">취소</button>
@@ -528,18 +560,46 @@ async function confirmUploadApplication(appId){
   if(!startDate){ showToast('시작일을 올바르게 입력해주세요.'); return; }
   if(!endDate){ showToast('종료일을 올바르게 입력해주세요.'); return; }
   if(!artist){ showToast('아티스트는 필수입니다.'); return; }
+  if(!title){ showToast('일정을 입력해주세요.'); return; }
   if(endDate < startDate){ showToast('종료일이 시작일보다 빠를 수 없습니다.'); return; }
   const btn = document.getElementById('upload-btn');
   if(btn) btn.disabled = true;
   try{
-    await Api.createSchedule({startDate, endDate, artist, category, title, venue, note});
     await Api.patchApplication(appId, {status:'uploaded'});
+    try{
+      await Api.createSchedule({startDate, endDate, artist, category, title, venue, note});
+    }catch(e){
+      await Api.patchApplication(appId, {status:'pending'}).catch(()=>{});
+      throw e;
+    }
     await refreshCaches();
     showToast('캘린더에 업로드되었습니다.');
-    closeModal(); renderBody();
+    closeModal(); render();
   }catch(e){
     showToast('업로드 실패: ' + e.message);
+    await refreshCaches().catch(()=>{});
     if(btn) btn.disabled = false;
+  }
+}
+function confirmRejectApplication(id){
+  openModal(`
+    <div class="modal-tag" style="background:var(--danger)">신청 거절</div>
+    <div class="modal-rows"><div class="modal-row"><span class="modal-value small">이 신청을 거절할까요? 신청자의 '내 신청'에 거절됨으로 표시돼요.</span></div></div>
+    <div class="modal-form-actions">
+      <button class="btn-ghost" onclick="openApplicationModal('${id}')">취소</button>
+      <button class="btn-danger" onclick="setApplicationStatus('${id}','rejected','거절했어요.')">거절</button>
+    </div>`);
+}
+function revertApplication(id){ setApplicationStatus(id, 'pending', '대기 상태로 되돌렸어요.'); }
+async function setApplicationStatus(id, status, doneMsg){
+  try{
+    await Api.patchApplication(id, {status});
+    await refreshCaches();
+    closeModal(); render();
+    showToast(doneMsg);
+  }catch(e){
+    showToast('처리 실패: ' + e.message);
+    await refreshCaches().catch(()=>{}); renderBody();
   }
 }
 function confirmDeleteApplication(id){
@@ -562,7 +622,27 @@ async function doDeleteApplication(id){
   }
 }
 
-window.addEventListener('DOMContentLoaded', render);
+/* ---- 로그인 상태 (오른쪽 위) ---- */
+async function renderAuthArea(){
+  const area = document.getElementById('auth-area');
+  let user = null;
+  try{ user = (await apiCall('resource=auth')).user; }catch(e){}
+  if(user){
+    const pic = user.picture ? `<img src="${escapeHtml(user.picture)}" alt="" referrerpolicy="no-referrer">` : '';
+    area.innerHTML = `<div class="user-chip">${pic}<span class="name">${escapeHtml(user.name||user.email)}</span>
+      <button class="logout-btn" onclick="adminLogout()">로그아웃</button></div>`;
+  } else {
+    // 비상용 비밀번호로 들어온 경우
+    area.innerHTML = `<span class="pw-note">비밀번호로 접속 중</span>
+      <a class="login-btn" href="/#/login?next=%2Fmanage">구글 로그인</a>`;
+  }
+}
+async function adminLogout(){
+  try{ await apiCall('resource=auth&action=logout', { method:'POST' }); }catch(e){}
+  location.href = '/';
+}
+
+window.addEventListener('DOMContentLoaded', ()=>{ renderAuthArea(); render(); });
 </script>
 </body>
 </html>

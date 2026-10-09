@@ -136,6 +136,7 @@
   .my-status{font-size:11px;font-weight:800;padding:4px 10px;border-radius:999px;white-space:nowrap;}
   .my-status.pending{background:#fff3bf;color:#997404;}
   .my-status.uploaded{background:#d3f9d8;color:#2b8a3e;}
+  .my-status.rejected{background:#ffe3e3;color:#c92a2a;}
 
   /* ---- legend ---- */
   .legend{display:flex;flex-wrap:wrap;gap:8px 14px;justify-content:center;margin-bottom:18px;}
@@ -155,7 +156,32 @@
   .cal-weekdays div{padding:10px 4px;text-align:center;font-size:12px;font-weight:700;color:var(--text-faint);}
   .cal-weekdays div:first-child{color:#e03131;}
   .cal-weekdays div:last-child{color:#228be6;}
-  .cal-grid{display:grid;grid-template-columns:repeat(7,1fr);}
+  .cal-grid{display:block;}
+  .cal-week{display:grid;grid-template-columns:repeat(7,minmax(0,1fr));min-height:104px;border-bottom:1px solid var(--border);}
+  .cal-week:last-child{border-bottom:none;}
+  .cal-daybg{border-right:1px solid var(--border);}
+  .cal-daybg.col7{border-right:none;}
+  .cal-daybg.other-month{background:var(--surface-2);}
+  .cal-daytop{padding:6px 5px 2px;display:flex;flex-direction:column;gap:4px;min-width:0;z-index:1;}
+  .cal-daytop.other-month{opacity:.55;}
+  .cal-daytop.today .cal-daynum{background:var(--accent);color:#fff;border-radius:50%;}
+  .cal-daytop.sun .cal-daynum{color:#e03131;}
+  .cal-daytop.sat .cal-daynum{color:#228be6;}
+  .cal-daytop.today.sun .cal-daynum, .cal-daytop.today.sat .cal-daynum{color:#fff;}
+  .cal-bar{z-index:2;margin:1px 4px;height:20px;border:none;border-radius:5px;color:#fff;font-size:10px;font-weight:700;
+    text-align:left;padding:0 6px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;font-family:var(--font);cursor:pointer;min-width:0;}
+  .cal-bar:hover{filter:brightness(1.08);}
+  .cal-bar.cont-l{margin-left:0;border-top-left-radius:0;border-bottom-left-radius:0;}
+  .cal-bar.cont-r{margin-right:0;border-top-right-radius:0;border-bottom-right-radius:0;}
+  .cal-bar.faded{opacity:.55;}
+  .cal-more{z-index:2;margin:1px 4px;}
+  .legend-sep{width:1px;height:18px;background:var(--border);align-self:center;}
+  .legend .legend-item.legend-toggle{opacity:.45;}
+  .legend .legend-item.legend-toggle.active{opacity:1;background:var(--surface);border-color:var(--border);color:var(--text);font-weight:700;}
+  .legend-toggle .tick{font-size:10px;margin-left:2px;}
+  .panel-controls{display:flex;align-items:center;gap:8px;}
+  .phys-check{display:flex;align-items:center;gap:4px;font-size:12px;color:var(--text-dim);font-weight:600;cursor:pointer;user-select:none;}
+  .phys-check input{accent-color:var(--accent);margin:0;}
   .cal-cell{
     min-height:104px;border-right:1px solid var(--border);border-bottom:1px solid var(--border);
     padding:6px 5px;display:flex;flex-direction:column;gap:4px;position:relative;
@@ -363,11 +389,11 @@ const CATEGORIES = {
   single:      { label:'싱글',      color:'var(--cat-single)',      group:'top' },
   mixtape:     { label:'믹스테잎',  color:'var(--cat-mixtape)',     group:'top' },
   compilation: { label:'컴필레이션',color:'var(--cat-compilation)', group:'top' },
-  physical:    { label:'피지컬',    color:'var(--cat-physical)',    group:'bottom' },
   concert:     { label:'콘서트',    color:'var(--cat-concert)',     group:'bottom' },
+  physical:    { label:'피지컬',    color:'var(--cat-physical)',    group:'bottom' },
 };
 const TOP_CATS = ['regular','ep','single','mixtape','compilation'];
-const BOTTOM_CATS = ['physical','concert'];
+const BOTTOM_CATS = ['concert','physical']; // 여러 날 이어지면 하나의 막대로 표시
 const ALL_CATS = [...TOP_CATS, ...BOTTOM_CATS];
 
 /* =========================================================
@@ -610,7 +636,16 @@ async function renderRoute(){
 ========================================================= */
 let calState = { year: new Date().getFullYear(), month: new Date().getMonth() }; // month: 0-index
 let panelState = { left: 'all', right: 'all' };
-let calFilter = []; // 캘린더에 보여줄 카테고리. 비어 있으면 전체
+let calFilter = []; // 캘린더에 보여줄 카테고리(피지컬 제외). 비어 있으면 전체
+let calShowPhysical = false; // 피지컬은 기본으로 숨기고, 켰을 때만 표시
+panelState.rightPhysical = false; // 다가오는 일정(전체)에서 피지컬 포함 여부
+let calDayItems = {}; // 날짜별로 지금 캘린더에 보이는 일정 (+N개 눌렀을 때 사용)
+function toggleCalPhysical(){ calShowPhysical = !calShowPhysical; renderMainPage(document.getElementById('app')); }
+function calVisible(s){
+  if(s.category === 'physical') return calShowPhysical;
+  return !calFilter.length || calFilter.includes(s.category);
+}
+function openCalDay(iso){ openDayListModal(iso, calDayItems[iso] || []); }
 function toggleCalFilter(cat){
   const i = calFilter.indexOf(cat);
   if(i > -1) calFilter.splice(i, 1); else calFilter.push(cat);
@@ -638,44 +673,85 @@ function buildCalendarCells(year, month){
 }
 
 function renderMainPage(app){
-  const schedules = scheduleCache;
   const cells = buildCalendarCells(calState.year, calState.month);
-  const byDate = {};
-  schedules.filter(s=> !calFilter.length || calFilter.includes(s.category)).forEach(s=>{
-    eachDateInRange(s.startDate, s.endDate).forEach(iso=>{
-      (byDate[iso] = byDate[iso]||[]).push(s);
-    });
-  });
+  const visible = scheduleCache.filter(calVisible);
+  const isoOf = c => fmtDateISO(c.date);
+
+  // 날짜별 보이는 일정 (+N개 목록용)
+  calDayItems = {};
+  visible.forEach(s=> eachDateInRange(s.startDate, s.endDate).forEach(iso=>{ (calDayItems[iso] = calDayItems[iso]||[]).push(s); }));
+
+  // 위쪽(발매) 칩: 날짜별
+  const topByDate = {};
+  visible.filter(s=>TOP_CATS.includes(s.category)).forEach(s=>
+    eachDateInRange(s.startDate, s.endDate).forEach(iso=>{ (topByDate[iso] = topByDate[iso]||[]).push(s); }));
+
+  // 아래쪽(콘서트·피지컬): 이어지는 막대
+  const barItems = visible.filter(s=>BOTTOM_CATS.includes(s.category))
+    .sort((a,b)=> a.startDate.localeCompare(b.startDate) || b.endDate.localeCompare(a.endDate) || BOTTOM_CATS.indexOf(a.category)-BOTTOM_CATS.indexOf(b.category));
 
   const weekdayNames = ['일','월','화','수','목','금','토'];
-  const legendHtml = ALL_CATS.map(k=>`
+  const legendHtml = ALL_CATS.filter(k=>k!=='physical').map(k=>`
     <button type="button" class="legend-item ${calFilter.includes(k)?'active':''}" onclick="toggleCalFilter('${k}')" aria-pressed="${calFilter.includes(k)}"><span class="legend-dot" style="background:${CATEGORIES[k].color}"></span>${CATEGORIES[k].label}</button>
-  `).join('');
+  `).join('') + `<span class="legend-sep"></span>
+    <button type="button" class="legend-item legend-toggle ${calShowPhysical?'active':''}" onclick="toggleCalPhysical()" aria-pressed="${calShowPhysical}" title="피지컬 일정 표시"><span class="legend-dot" style="background:${CATEGORIES.physical.color}"></span>피지컬<span class="tick">${calShowPhysical?'✓':'＋'}</span></button>`;
 
-  const cellsHtml = cells.map(c=>{
-    const iso = fmtDateISO(c.date);
-    const list = byDate[iso] || [];
-    const topItems = list.filter(s=>TOP_CATS.includes(s.category));
-    const bottomItems = list.filter(s=>BOTTOM_CATS.includes(s.category));
-    const isToday = iso === todayISO();
-    const maxShow = 2;
-    const topChips = topItems.slice(0,maxShow).map(s=>{
-      const cat = CATEGORIES[s.category];
-      return `<button class="chip" style="background:${cat.color}" title="${escapeHtml(s.artist)} · ${cat.label}" onclick="openScheduleModal('${s.id}')">${escapeHtml(s.artist)}</button>`;
-    }).join('');
-    const topMore = topItems.length>maxShow ? `<button class="chip more" onclick="openDayListModal('${iso}', ${JSON.stringify(topItems.concat(bottomItems)).replace(/"/g,'&quot;')})">+${topItems.length-maxShow}개</button>` : '';
-    const bottomChips = bottomItems.slice(0,maxShow).map(s=>{
-      const cat = CATEGORIES[s.category];
-      return `<button class="chip" style="background:${cat.color}" title="${escapeHtml(s.artist)} · ${cat.label}" onclick="openScheduleModal('${s.id}')">${escapeHtml(s.artist)}</button>`;
-    }).join('');
-    const bottomMore = bottomItems.length>maxShow ? `<button class="chip more" onclick="openDayListModal('${iso}', ${JSON.stringify(topItems.concat(bottomItems)).replace(/"/g,'&quot;')})">+${bottomItems.length-maxShow}개</button>` : '';
+  const MAX_TOP = 2, MAX_LANES = 3;
+  let weeksHtml = '';
+  for(let w=0; w<cells.length/7; w++){
+    const days = cells.slice(w*7, w*7+7);
+    const first = isoOf(days[0]), last = isoOf(days[6]);
+    const isoList = days.map(isoOf);
 
-    return `<div class="cal-cell ${c.other?'other-month':''} ${isToday?'today':''}">
-      <div class="cal-daynum">${c.date.getDate()}</div>
-      <div class="chip-group top">${topChips}${topMore}</div>
-      <div class="chip-group bottom">${bottomChips}${bottomMore}</div>
-    </div>`;
-  }).join('');
+    // 이 주에 걸치는 막대 조각
+    const segs = barItems.filter(s=> s.startDate <= last && s.endDate >= first).map(s=>{
+      const a = s.startDate < first ? first : s.startDate;
+      const b = s.endDate > last ? last : s.endDate;
+      return { s, c0: isoList.indexOf(a), c1: isoList.indexOf(b), contL: s.startDate < first, contR: s.endDate > last };
+    }).sort((x,y)=> x.c0-y.c0 || (y.c1-y.c0)-(x.c1-x.c0));
+    // 겹치지 않게 줄(lane) 배정
+    const lanes = [], hidden = [0,0,0,0,0,0,0];
+    segs.forEach(g=>{
+      let L = lanes.findIndex(lane=> lane.every(o=> o.c1 < g.c0 || o.c0 > g.c1));
+      if(L === -1 && lanes.length < MAX_LANES){ lanes.push([]); L = lanes.length-1; }
+      if(L === -1){ for(let c=g.c0;c<=g.c1;c++) hidden[c]++; return; }
+      lanes[L].push(g); g.lane = L;
+    });
+    const hasMore = hidden.some(n=>n>0);
+    const rows = ['auto','1fr', ...lanes.map(()=>'22px'), ...(hasMore?['22px']:[]), '4px'].join(' ');
+
+    let html = '';
+    days.forEach((c,i)=>{
+      const iso = isoList[i];
+      html += `<div class="cal-daybg ${c.other?'other-month':''} ${i===6?'col7':''}" style="grid-column:${i+1};grid-row:1 / -1"></div>`;
+    });
+    days.forEach((c,i)=>{
+      const iso = isoList[i];
+      const tops = topByDate[iso] || [];
+      const chips = tops.slice(0,MAX_TOP).map(s=>{
+        const cat = CATEGORIES[s.category];
+        return `<button class="chip" style="background:${cat.color}" title="${escapeHtml(s.artist)} · ${cat.label}" onclick="openScheduleModal('${s.id}')">${escapeHtml(s.artist)}</button>`;
+      }).join('');
+      const more = tops.length>MAX_TOP ? `<button class="chip more" onclick="openCalDay('${iso}')">+${tops.length-MAX_TOP}개</button>` : '';
+      const cls = [c.other?'other-month':'', iso===todayISO()?'today':'', i===0?'sun':'', i===6?'sat':''].join(' ');
+      html += `<div class="cal-daytop ${cls}" style="grid-column:${i+1};grid-row:1">
+        <div class="cal-daynum">${c.date.getDate()}</div>
+        <div class="chip-group top">${chips}${more}</div>
+      </div>`;
+    });
+    segs.filter(g=>g.lane!==undefined).forEach(g=>{
+      const cat = CATEGORIES[g.s.category];
+      const span = g.c1 - g.c0 + 1;
+      const allOther = days.slice(g.c0, g.c1+1).every(c=>c.other);
+      html += `<button class="cal-bar ${g.contL?'cont-l':''} ${g.contR?'cont-r':''} ${allOther?'faded':''}"
+        style="grid-column:${g.c0+1} / span ${span};grid-row:${3+g.lane};background:${cat.color}"
+        title="${escapeHtml(g.s.artist)}${g.s.title?' · '+escapeHtml(g.s.title):''}" onclick="openScheduleModal('${g.s.id}')">${escapeHtml(g.s.artist)}</button>`;
+    });
+    hidden.forEach((n,i)=>{
+      if(n>0) html += `<button class="chip more cal-more" style="grid-column:${i+1};grid-row:${3+lanes.length}" onclick="openCalDay('${isoList[i]}')">+${n}개</button>`;
+    });
+    weeksHtml += `<div class="cal-week" style="grid-template-rows:${rows}">${html}</div>`;
+  }
 
   app.innerHTML = `
     <div class="cal-header">
@@ -687,7 +763,7 @@ function renderMainPage(app){
     <div class="legend ${calFilter.length?'filtering':''}">${legendHtml}${calFilter.length?'<button type="button" class="legend-reset" onclick="resetCalFilter()">전체 보기</button>':''}</div>
     <div class="cal-wrap">
       <div class="cal-weekdays">${weekdayNames.map(w=>`<div>${w}</div>`).join('')}</div>
-      <div class="cal-grid">${cellsHtml}</div>
+      <div class="cal-grid">${weeksHtml}</div>
     </div>
     <div class="panels">
       <div class="panel">
@@ -702,9 +778,12 @@ function renderMainPage(app){
       <div class="panel">
         <div class="panel-head">
           <h3>⏰ 다가오는 일정</h3>
-          <select onchange="panelState.right=this.value; renderRoute();">
-            ${['all',...ALL_CATS].map(k=>`<option value="${k}" ${panelState.right===k?'selected':''}>${k==='all'?'전체':CATEGORIES[k].label}</option>`).join('')}
-          </select>
+          <div class="panel-controls">
+            ${panelState.right==='all' ? `<label class="phys-check"><input type="checkbox" ${panelState.rightPhysical?'checked':''} onchange="panelState.rightPhysical=this.checked; renderMainPanelsOnly();">피지컬 포함</label>` : ''}
+            <select onchange="panelState.right=this.value; renderRoute();">
+              ${['all',...ALL_CATS].map(k=>`<option value="${k}" ${panelState.right===k?'selected':''}>${k==='all'?'전체':CATEGORIES[k].label}</option>`).join('')}
+            </select>
+          </div>
         </div>
         <ul class="panel-list" id="panel-right"></ul>
       </div>
@@ -724,6 +803,7 @@ function getUpcomingList(){
   // 아직 끝나지 않은 일정(진행 중 포함)만, 시작일이 빠른 순으로
   let list = scheduleCache.filter(s=> daysUntil(s.endDate) >= 0);
   if(panelState.right !== 'all') list = list.filter(s=>s.category===panelState.right);
+  else if(!panelState.rightPhysical) list = list.filter(s=>s.category!=='physical');
   return list.slice().sort((a,b)=> a.startDate.localeCompare(b.startDate)).slice(0,6);
 }
 function renderMainPanelsOnly(){
@@ -940,7 +1020,9 @@ async function renderMyPage(app){
   catch(e){ app.innerHTML = `<div class="form-card"><h2>내 신청</h2><p class="sub">불러오지 못했습니다: ${escapeHtml(e.message)}</p></div>`; return; }
   const rows = list.map(a=>{
     const cat = CATEGORIES[a.category] || {label:a.category, color:'#888'};
-    const status = a.status==='uploaded' ? '<span class="my-status uploaded">등록 완료</span>' : '<span class="my-status pending">검토 중</span>';
+    const status = a.status==='uploaded' ? '<span class="my-status uploaded">등록 완료</span>'
+      : a.status==='rejected' ? '<span class="my-status rejected">거절됨</span>'
+      : '<span class="my-status pending">검토 중</span>';
     return `<li class="my-item">
       <span class="tag" style="background:${cat.color};color:#fff;font-size:10px;font-weight:700;padding:3px 8px;border-radius:999px;white-space:nowrap">${escapeHtml(cat.label)}</span>
       <div class="info">
