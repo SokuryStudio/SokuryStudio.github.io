@@ -55,11 +55,28 @@ async function readList(name) {
   if (!raw) return [];
   try {
     const parsed = typeof raw === 'string' ? JSON.parse(raw) : raw;
-    return Array.isArray(parsed) ? parsed : [];
+    return Array.isArray(parsed) ? parsed.map(withArtists) : [];
   } catch (e) {
     return [];
   }
 }
+// 아티스트 여러 명: artists 배열이 기준, artist는 화면 표시용 "A, B" 문자열
+function withArtists(x) {
+  if (!x || typeof x !== 'object') return x;
+  if (Array.isArray(x.artists) && x.artists.length) x.artist = x.artists.join(', ');
+  else x.artists = x.artist ? [String(x.artist)] : [];
+  return x;
+}
+function cleanArtists(b) {
+  const src = Array.isArray(b.artists) ? b.artists : (b.artist ? [b.artist] : []);
+  const out = [];
+  for (const v of src) {
+    const n = String(v || '').replace(/\s+/g, ' ').trim().slice(0, 80);
+    if (n && !out.includes(n)) out.push(n);
+  }
+  return out.slice(0, 20);
+}
+
 async function writeList(name, list) {
   await redis(['SET', KEYS[name], JSON.stringify(list)]);
 }
@@ -126,17 +143,46 @@ async function loadGoogleFont(weight, text) {
 }
 const el = (type, style, children) => ({ type, props: { style, children } });
 
-async function renderCardPng(s) {
+async function treeToPng(tree, text) {
   const { ImageResponse } = await import('@vercel/og');
+  const [w500, w700, w900] = await Promise.all([loadGoogleFont(500, text), loadGoogleFont(700, text), loadGoogleFont(900, text)]);
+  const img = new ImageResponse(tree, {
+    width: 1200, height: 630,
+    fonts: [
+      { name: 'Noto Sans KR', data: w500, weight: 500, style: 'normal' },
+      { name: 'Noto Sans KR', data: w700, weight: 700, style: 'normal' },
+      { name: 'Noto Sans KR', data: w900, weight: 900, style: 'normal' },
+    ],
+  });
+  return Buffer.from(await img.arrayBuffer());
+}
+
+// 사이트 대표 카드 (sokury.kr 링크를 공유했을 때) — 그림 파일 없이 레이아웃 코드로 그림
+const SITE_CAT_ORDER = ['regular', 'ep', 'single', 'mixtape', 'compilation', 'concert', 'physical'];
+const SITE_LINE1 = '좋아하는 아티스트의';
+const SITE_LINE2 = '앨범, LP, 콘서트 일정을 한 눈에';
+async function renderSiteCardPng() {
+  const pills = SITE_CAT_ORDER.map((k) =>
+    el('div', { display: 'flex', background: CAT_COLORS[k], color: '#fff', fontSize: 26, fontWeight: 700, borderRadius: 999, padding: '6px 22px', marginRight: 12 }, CATEGORY_LABELS[k]));
+  const tree = el('div', { width: '100%', height: '100%', display: 'flex', background: '#ffffff', padding: 56, fontFamily: 'Noto Sans KR' }, [
+    el('div', { flex: 1, display: 'flex', flexDirection: 'column', background: '#f0f1f6', border: '2px solid #e3e5ec', borderRadius: 40, padding: '64px 72px' }, [
+      el('div', { display: 'flex' }, pills),
+      el('div', { display: 'flex', marginTop: 36, fontSize: 104, fontWeight: 900, color: '#6C5CFC', lineHeight: 1, letterSpacing: -2 }, 'Sokury'),
+      el('div', { display: 'flex', marginTop: 26, fontSize: 46, fontWeight: 700, color: '#1c1e26', lineHeight: 1.35 }, SITE_LINE1),
+      el('div', { display: 'flex', fontSize: 46, fontWeight: 700, color: '#1c1e26', lineHeight: 1.35 }, SITE_LINE2),
+    ]),
+  ]);
+  const text = SITE_CAT_ORDER.map((k) => CATEGORY_LABELS[k]).join('') + 'Sokury' + SITE_LINE1 + SITE_LINE2;
+  return treeToPng(tree, text);
+}
+
+async function renderCardPng(s) {
   const label = CATEGORY_LABELS[s.category] || s.category;
   const color = CAT_COLORS[s.category] || '#6C5CFC';
   const artist = clip(s.artist, 40);
   const meta = clip(fmtRange(s.startDate, s.endDate) + (s.title ? ' · ' + s.title : '') + (s.venue ? ' · ' + s.venue : ''), 110);
   const likes = String(s.likes || 0);
   const allText = label + artist + meta + likes + 'Sokury…0123456789';
-  const [w500, w700, w900] = await Promise.all([
-    loadGoogleFont(500, allText), loadGoogleFont(700, allText), loadGoogleFont(900, allText),
-  ]);
 
   const tree = el('div', { width: '100%', height: '100%', display: 'flex', background: '#ffffff', padding: 56, fontFamily: 'Noto Sans KR' }, [
     el('div', { flex: 1, display: 'flex', flexDirection: 'column', background: '#f0f1f6', border: '2px solid #e3e5ec', borderRadius: 40, padding: '64px 72px 52px' }, [
@@ -153,33 +199,24 @@ async function renderCardPng(s) {
     ]),
   ]);
 
-  const img = new ImageResponse(tree, {
-    width: 1200, height: 630,
-    fonts: [
-      { name: 'Noto Sans KR', data: w500, weight: 500, style: 'normal' },
-      { name: 'Noto Sans KR', data: w700, weight: 700, style: 'normal' },
-      { name: 'Noto Sans KR', data: w900, weight: 900, style: 'normal' },
-    ],
-  });
-  return Buffer.from(await img.arrayBuffer());
+  return treeToPng(tree, allText);
 }
 
 async function handleOgImage(req, res, id) {
   if (req.method !== 'GET' && req.method !== 'HEAD') return res.status(405).json({ error: '지원하지 않는 요청입니다.' });
-  const list = await readList('schedules');
-  const s = id ? list.find((x) => x.id === id) : null;
-  const fallback = `/og-${s ? s.category : 'default'}.png`;
-  if (!s) { res.setHeader('Location', fallback); return res.status(302).end(); }
+  const list = id && id !== 'site' ? await readList('schedules') : [];
+  const s = list.find((x) => x.id === id) || null;
+  let png = null;
   try {
-    const png = await renderCardPng(s);
-    res.setHeader('Content-Type', 'image/png');
-    res.setHeader('Cache-Control', 'public, max-age=600, s-maxage=86400');
-    return res.status(200).send(png);
+    png = s ? await renderCardPng(s) : await renderSiteCardPng(); // 없는 일정이면 사이트 대표 카드
   } catch (e) {
     console.error('카드 이미지 생성 실패:', e && e.message);
-    res.setHeader('Location', fallback); // 실패해도 카테고리 이미지로 미리보기는 뜨도록
-    return res.status(302).end();
+    try { png = await renderSiteCardPng(); } catch (e2) { png = null; }
   }
+  if (!png) return res.status(503).json({ error: '이미지를 만들지 못했습니다.' }); // 이 경우 미리보기는 글자만 표시됨
+  res.setHeader('Content-Type', 'image/png');
+  res.setHeader('Cache-Control', 'public, max-age=600, s-maxage=86400');
+  return res.status(200).send(png);
 }
 
 
@@ -271,6 +308,161 @@ async function handleMyApplications(req, res) {
   return res.status(200).json(mine);
 }
 
+
+// ---------------------------------------------------------------------------
+// 아티스트 이름 관리 + 그룹(아이돌 그룹·레이블 등)
+//   sokury:artistdb = { artists: [{ name, groups: [groupId] }], groups: [{ id, name, kind }] }
+//   조회(GET)는 공개(자동완성·연관 검색용), 수정은 관리자만 (middleware.js)
+// ---------------------------------------------------------------------------
+const ARTISTDB_KEY = 'sokury:artistdb';
+const GROUP_KINDS = ['그룹', '레이블', '기타'];
+async function readArtistDb() {
+  const raw = await redis(['GET', ARTISTDB_KEY]);
+  let db = {};
+  try { db = raw ? (typeof raw === 'string' ? JSON.parse(raw) : raw) : {}; } catch (e) { db = {}; }
+  return { artists: Array.isArray(db.artists) ? db.artists : [], groups: Array.isArray(db.groups) ? db.groups : [] };
+}
+async function writeArtistDb(db) { await redis(['SET', ARTISTDB_KEY, JSON.stringify(db)]); }
+async function ensureRegistry(names) {
+  const db = await readArtistDb();
+  let changed = false;
+  for (const n of names) if (!db.artists.some((a) => a.name === n)) { db.artists.push({ name: n, groups: [] }); changed = true; }
+  if (changed) await writeArtistDb(db);
+}
+const cleanName = (v) => String(v || '').replace(/\s+/g, ' ').trim().slice(0, 80);
+
+// 일정·신청 전체에서 아티스트 이름 바꾸기/빼기
+async function rewriteArtistEverywhere(fn) {
+  let changedCount = 0;
+  for (const kind of ['schedules', 'applications']) {
+    const list = await readList(kind);
+    let changed = false;
+    for (const x of list) {
+      const before = x.artists.join('\u0000');
+      const next = [];
+      for (const n of fn(x.artists)) if (n && !next.includes(n)) next.push(n);
+      if (next.join('\u0000') !== before) {
+        x.artists = next; x.artist = next.join(', '); changed = true;
+        if (kind === 'schedules') changedCount++;
+      }
+    }
+    if (changed) await writeList(kind, list);
+  }
+  return changedCount;
+}
+
+async function handleArtists(req, res, action) {
+  const db = await readArtistDb();
+  if (req.method === 'GET') {
+    // 등록부에 없지만 일정에 쓰인 이름도 함께 보여줌
+    const schedules = await readList('schedules');
+    for (const s of schedules) for (const n of s.artists) if (!db.artists.some((a) => a.name === n)) db.artists.push({ name: n, groups: [] });
+    db.artists.sort((a, b) => a.name.localeCompare(b.name, 'ko'));
+    return res.status(200).json(db);
+  }
+  if (req.method !== 'POST') return res.status(405).json({ error: '지원하지 않는 요청입니다.' });
+  const b = getBody(req);
+
+  if (action === 'add') {
+    const name = cleanName(b.name);
+    if (!name) return res.status(400).json({ error: '이름을 입력해주세요.' });
+    if (db.artists.some((a) => a.name === name)) return res.status(409).json({ error: '이미 있는 아티스트예요.' });
+    db.artists.push({ name, groups: [] });
+    await writeArtistDb(db);
+    return res.status(201).json({ name });
+  }
+
+  if (action === 'rename') {
+    const from = cleanName(b.from), to = cleanName(b.to);
+    if (!from || !to) return res.status(400).json({ error: '이름을 입력해주세요.' });
+    if (from === to) return res.status(400).json({ error: '같은 이름이에요.' });
+    const src = db.artists.find((a) => a.name === from) || { name: from, groups: [] };
+    const dst = db.artists.find((a) => a.name === to);
+    if (dst) { // 이미 있는 이름이면 하나로 합침
+      dst.groups = Array.from(new Set([...(dst.groups || []), ...(src.groups || [])]));
+      db.artists = db.artists.filter((a) => a.name !== from);
+    } else if (db.artists.includes(src)) {
+      src.name = to;
+    } else {
+      db.artists.push({ name: to, groups: [] });
+    }
+    await writeArtistDb(db);
+    const n = await rewriteArtistEverywhere((arr) => arr.map((x) => (x === from ? to : x)));
+    return res.status(200).json({ from, to, merged: Boolean(dst), schedulesUpdated: n });
+  }
+
+  if (action === 'delete') {
+    const name = cleanName(b.name);
+    const schedules = await readList('schedules');
+    const only = schedules.filter((s) => s.artists.length === 1 && s.artists[0] === name);
+    if (only.length) {
+      return res.status(409).json({ error: `이 아티스트만 있는 일정이 ${only.length}개 있어요. 먼저 그 일정을 수정하거나 삭제해주세요.`, scheduleIds: only.map((s) => s.id) });
+    }
+    db.artists = db.artists.filter((a) => a.name !== name);
+    await writeArtistDb(db);
+    const n = await rewriteArtistEverywhere((arr) => arr.filter((x) => x !== name));
+    return res.status(200).json({ deleted: name, schedulesUpdated: n });
+  }
+
+  if (action === 'setgroups') {
+    const name = cleanName(b.name);
+    if (!name) return res.status(400).json({ error: '이름이 없습니다.' });
+    const valid = (Array.isArray(b.groups) ? b.groups : []).filter((id) => db.groups.some((g) => g.id === id));
+    let a = db.artists.find((x) => x.name === name);
+    if (!a) { a = { name, groups: [] }; db.artists.push(a); }
+    a.groups = Array.from(new Set(valid));
+    await writeArtistDb(db);
+    return res.status(200).json(a);
+  }
+  return res.status(400).json({ error: '지원하지 않는 요청입니다.' });
+}
+
+async function handleGroups(req, res, id, action) {
+  const db = await readArtistDb();
+  const b = getBody(req);
+  if (req.method === 'GET') return res.status(200).json(db.groups);
+
+  if (req.method === 'POST' && !id) {
+    const name = cleanName(b.name);
+    if (!name) return res.status(400).json({ error: '그룹 이름을 입력해주세요.' });
+    if (db.groups.some((g) => g.name === name)) return res.status(409).json({ error: '이미 있는 그룹이에요.' });
+    const g = { id: uid('g'), name, kind: GROUP_KINDS.includes(b.kind) ? b.kind : '그룹' };
+    db.groups.push(g);
+    await writeArtistDb(db);
+    return res.status(201).json(g);
+  }
+  const g = db.groups.find((x) => x.id === id);
+  if (!g) return res.status(404).json({ error: '그룹을 찾을 수 없습니다.' });
+
+  if (req.method === 'PUT') {
+    const name = b.name !== undefined ? cleanName(b.name) : g.name;
+    if (!name) return res.status(400).json({ error: '그룹 이름을 입력해주세요.' });
+    if (db.groups.some((x) => x.id !== id && x.name === name)) return res.status(409).json({ error: '이미 있는 그룹 이름이에요.' });
+    g.name = name;
+    if (GROUP_KINDS.includes(b.kind)) g.kind = b.kind;
+    await writeArtistDb(db);
+    return res.status(200).json(g);
+  }
+  if (req.method === 'POST' && action === 'members') {
+    const members = (Array.isArray(b.members) ? b.members : []).map(cleanName).filter(Boolean);
+    for (const n of members) if (!db.artists.some((a) => a.name === n)) db.artists.push({ name: n, groups: [] });
+    for (const a of db.artists) {
+      const set = new Set(a.groups || []);
+      if (members.includes(a.name)) set.add(id); else set.delete(id);
+      a.groups = Array.from(set);
+    }
+    await writeArtistDb(db);
+    return res.status(200).json({ id, members });
+  }
+  if (req.method === 'DELETE') {
+    db.groups = db.groups.filter((x) => x.id !== id);
+    for (const a of db.artists) a.groups = (a.groups || []).filter((x) => x !== id);
+    await writeArtistDb(db);
+    return res.status(200).json({ deleted: id });
+  }
+  return res.status(405).json({ error: '지원하지 않는 요청입니다.' });
+}
+
 async function handleSchedules(req, res, id, action) {
   const m = req.method;
 
@@ -289,12 +481,15 @@ async function handleSchedules(req, res, id, action) {
   }
 
   if (m === 'POST' && !id && !action) {
-    const { startDate, endDate, artist, category, title, note, venue } = getBody(req);
-    if (!startDate || !endDate || !artist || !category) {
+    const b = getBody(req);
+    const { startDate, endDate, category, title, note, venue } = b;
+    const artists = cleanArtists(b);
+    if (!startDate || !endDate || !artists.length || !category) {
       return res.status(400).json({ error: '시작일, 종료일, 아티스트, 카테고리는 필수입니다.' });
     }
     const list = await readList('schedules');
-    const item = { id: uid('s'), startDate, endDate, artist, category, title: title || '', venue: venue || '', note: note || '', likes: 0, createdAt: Date.now() };
+    const item = { id: uid('s'), startDate, endDate, artists, artist: artists.join(', '), category, title: title || '', venue: venue || '', note: note || '', likes: 0, createdAt: Date.now() };
+    await ensureRegistry(artists);
     list.push(item);
     await writeList('schedules', list);
     return res.status(201).json(item);
@@ -305,8 +500,14 @@ async function handleSchedules(req, res, id, action) {
     const i = list.findIndex((x) => x.id === id);
     if (i === -1) return res.status(404).json({ error: '일정을 찾을 수 없습니다.' });
     const b = getBody(req);
-    for (const k of ['startDate', 'endDate', 'artist', 'category', 'title', 'venue', 'note']) {
+    for (const k of ['startDate', 'endDate', 'category', 'title', 'venue', 'note']) {
       if (b[k] !== undefined) list[i][k] = b[k];
+    }
+    if (b.artists !== undefined || b.artist !== undefined) {
+      const artists = cleanArtists(b);
+      if (!artists.length) return res.status(400).json({ error: '아티스트는 최소 1명 필요합니다.' });
+      list[i].artists = artists; list[i].artist = artists.join(', ');
+      await ensureRegistry(artists);
     }
     await writeList('schedules', list);
     return res.status(200).json(list[i]);
@@ -331,13 +532,16 @@ async function handleApplications(req, res, id) {
   }
 
   if (m === 'POST' && !id) {
-    const { startDate, endDate, artist, category, name, note, venue } = getBody(req);
-    if (!startDate || !endDate || !artist || !category || !name) {
+    const b = getBody(req);
+    const { startDate, endDate, category, name, note, venue } = b;
+    const artists = cleanArtists(b);
+    const artist = artists.join(', ');
+    if (!startDate || !endDate || !artists.length || !category || !name) {
       return res.status(400).json({ error: '시작일, 종료일, 아티스트, 카테고리, 일정은 필수입니다.' });
     }
     const list = await readList('applications');
     const me = readSession(req);
-    const item = { id: uid('a'), startDate, endDate, artist, category, name, venue: venue || '', note: note || '', status: 'pending', createdAt: Date.now() };
+    const item = { id: uid('a'), startDate, endDate, artists, artist, category, name, venue: venue || '', note: note || '', status: 'pending', createdAt: Date.now() };
     if (me) { item.ownerSub = me.sub; item.ownerEmail = me.email; }
     list.push(item);
     await writeList('applications', list);
@@ -374,7 +578,7 @@ async function handleApplications(req, res, id) {
 }
 
 
-const CATEGORY_LABELS = { regular: '정규', ep: 'EP', single: '싱글', mixtape: '믹스테잎', compilation: '컴필레이션', physical: '피지컬', concert: '콘서트' };
+const CATEGORY_LABELS = { regular: '정규', ep: 'EP', single: '싱글', mixtape: '믹스테입', compilation: '컴필레이션', physical: '피지컬', concert: '콘서트' };
 function esc(str) {
   return String(str == null ? '' : str).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 }
@@ -395,7 +599,7 @@ async function handleShare(req, res, id) {
 
   let title = 'Sokury';
   let desc = '좋아하는 아티스트의 앨범, LP, 콘서트 일정을 한 눈에';
-  let image = `${origin}/og-default.png`;
+  let image = `${origin}/og/site`;
   let target = '/';
   if (s) {
     const cat = CATEGORY_LABELS[s.category] || s.category;
@@ -448,6 +652,8 @@ module.exports = async function handler(req, res) {
     if (resource === 'config') return await handleConfig(req, res);
     if (resource === 'auth') return await handleAuth(req, res, action);
     if (resource === 'myapplications') return await handleMyApplications(req, res);
+    if (resource === 'artists') return await handleArtists(req, res, action);
+    if (resource === 'groups') return await handleGroups(req, res, id, action);
     if (resource === 'share') return await handleShare(req, res, id);
     if (resource === 'ogimage') return await handleOgImage(req, res, id);
     if (resource === 'schedules') return await handleSchedules(req, res, id, action);
