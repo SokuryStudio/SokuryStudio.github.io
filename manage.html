@@ -46,7 +46,7 @@
   .admin-nav a:hover{background:var(--accent-soft);color:var(--accent);}
   #auth-area{display:flex;align-items:center;gap:8px;}
   .user-chip{display:flex;align-items:center;gap:8px;font-size:13px;font-weight:700;color:var(--text);}
-  .user-chip img{width:28px;height:28px;border-radius:50%;object-fit:cover;background:var(--surface-2);}
+  .user-chip .avatar{width:28px;height:28px;border-radius:50%;background:var(--accent);color:#fff;font-size:13px;font-weight:900;display:flex;align-items:center;justify-content:center;flex-shrink:0;}
   .user-chip .name{max-width:160px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
   .logout-btn{background:none;border:none;color:var(--text-faint);font-size:12px;cursor:pointer;font-family:var(--font);padding:4px;}
   .logout-btn:hover{color:var(--danger);}
@@ -142,6 +142,76 @@
   #toast-root{position:fixed;bottom:24px;left:50%;transform:translateX(-50%);z-index:400;display:flex;flex-direction:column;gap:8px;align-items:center;}
   .toast{background:#1c1e28;color:#fff;padding:11px 20px;border-radius:999px;font-size:13px;font-weight:600;box-shadow:var(--shadow-lg);animation:toastin .2s ease;}
   @keyframes toastin{from{opacity:0;transform:translateY(8px);}to{opacity:1;transform:translateY(0);}}
+  /* ---- 아티스트 여러 명 + 자동완성 ---- */
+  .artist-fields{display:flex;flex-direction:column;gap:12px;}
+  .artist-fields .field{margin-bottom:0;}
+  .ac-wrap{position:relative;}
+  .ac-wrap .artist-input{padding-right:40px;}
+  .artist-remove{position:absolute;right:8px;top:50%;transform:translateY(-50%);width:26px;height:26px;border-radius:50%;border:none;
+    background:var(--surface);color:var(--text-faint);cursor:pointer;font-size:12px;}
+  .artist-remove:hover{color:var(--danger);}
+  .artist-add{align-self:flex-start;background:none;border:1px dashed var(--border);border-radius:999px;padding:6px 14px;color:var(--accent);
+    font-weight:700;font-size:12px;cursor:pointer;font-family:var(--font);}
+  .artist-add:hover{border-color:var(--accent);background:var(--accent-soft);}
+  .ac-list{position:absolute;left:0;right:0;top:calc(100% + 4px);z-index:40;background:var(--surface);border:1px solid var(--border);
+    border-radius:10px;box-shadow:var(--shadow-lg);display:none;max-height:240px;overflow-y:auto;}
+  .ac-list.show{display:block;}
+  .ac-item{padding:9px 12px;cursor:pointer;display:flex;justify-content:space-between;align-items:center;gap:8px;font-size:14px;color:var(--text);}
+  .ac-item small{font-size:11px;color:var(--text-faint);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+  .ac-item.active,.ac-item:hover{background:var(--accent-soft);color:var(--accent);}
+  /* ---- 엑셀식 열 필터 ---- */
+  .th-filter{background:none;border:none;padding:0;font:inherit;color:inherit;cursor:pointer;display:inline-flex;align-items:center;gap:4px;font-weight:800;}
+  .th-filter:hover{color:var(--accent);}
+  .th-filter.on{color:var(--accent);}
+  .th-caret{font-size:10px;opacity:.8;}
+  .col-filter{position:absolute;z-index:300;width:250px;background:var(--surface);border:1px solid var(--border);border-radius:12px;
+    box-shadow:var(--shadow-lg);padding:10px;display:flex;flex-direction:column;gap:8px;font-size:13px;}
+  .cf-sort{display:flex;flex-direction:column;gap:2px;border-bottom:1px solid var(--border);padding-bottom:8px;}
+  .cf-sort button{text-align:left;background:none;border:none;padding:6px 8px;border-radius:6px;cursor:pointer;color:var(--text);font-family:var(--font);font-size:13px;}
+  .cf-sort button:hover{background:var(--accent-soft);color:var(--accent);}
+  .cf-search{padding:7px 10px;border-radius:8px;border:1px solid var(--border);background:var(--surface-2);color:var(--text);font-family:var(--font);font-size:13px;}
+  .cf-list{max-height:240px;overflow-y:auto;border:1px solid var(--border);border-radius:8px;padding:4px;}
+  .cf-item{display:flex;align-items:center;gap:8px;padding:5px 6px;border-radius:6px;cursor:pointer;color:var(--text);}
+  .cf-item:hover{background:var(--surface-2);}
+  .cf-item span{flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+  .cf-item small{color:var(--text-faint);font-size:11px;}
+  .cf-item input{accent-color:var(--accent);margin:0;}
+  .cf-all{font-weight:700;border-bottom:1px solid var(--border);border-radius:0;margin-bottom:2px;}
+  .cf-empty{padding:12px;text-align:center;color:var(--text-faint);}
+  .cf-actions{display:flex;justify-content:flex-end;gap:6px;}
+  .cf-actions button{padding:7px 12px;font-size:12px;}
+  .filter-note{font-size:12px;color:var(--accent);font-weight:700;margin:0 0 8px;}
+  .filter-note button{background:none;border:none;color:var(--text-faint);text-decoration:underline;cursor:pointer;font-family:var(--font);font-size:12px;}
+
+  /* ---- 일정 보기 선택 ---- */
+  .view-picker{display:flex;align-items:center;gap:6px;flex-wrap:wrap;}
+  .view-picker select{padding:8px 12px;border-radius:8px;border:1px solid var(--border);background:var(--surface);font-size:13px;color:var(--text);font-family:var(--font);font-weight:700;}
+  .view-step{width:32px;height:32px;border-radius:50%;border:1px solid var(--border);background:var(--surface);cursor:pointer;color:var(--text);font-size:14px;}
+  .view-step:hover{border-color:var(--accent);color:var(--accent);}
+  .view-label{font-size:12px;color:var(--text-faint);font-weight:700;margin-left:6px;}
+  .carry{display:inline-block;margin-left:6px;font-size:10px;font-weight:800;color:var(--accent);background:var(--accent-soft);border-radius:999px;padding:1px 7px;}
+  .sep{color:var(--text-faint);}
+  .muted{color:var(--text-faint);font-size:12px;}
+
+  /* ---- 이름 관리 ---- */
+  .group-bar{display:flex;align-items:center;gap:6px;flex-wrap:wrap;flex:1;min-width:0;}
+  .group-bar-label{font-size:12px;font-weight:800;color:var(--text-faint);margin-right:4px;}
+  .grp-chip{display:inline-block;font-size:11px;font-weight:700;color:var(--accent);background:var(--accent-soft);border-radius:999px;padding:2px 9px;cursor:pointer;border:none;font-family:var(--font);margin:1px 0;}
+  .grp-chip.big{font-size:12px;padding:5px 12px;}
+  .grp-chip small{font-weight:600;opacity:.75;font-size:10px;}
+  .grp-chip:hover{background:var(--accent);color:#fff;}
+  .acts-cell{min-width:280px;}
+  .acts{display:flex;flex-direction:column;gap:4px;align-items:flex-start;}
+  .act{display:inline-flex;align-items:center;gap:6px;background:var(--surface-2);border:1px solid var(--border);border-radius:8px;padding:4px 9px;
+    font-size:12px;color:var(--text);cursor:pointer;font-family:var(--font);text-align:left;}
+  .act:hover{border-color:var(--accent);color:var(--accent);}
+  .act .dot{width:7px;height:7px;border-radius:2px;flex-shrink:0;}
+  .act small{color:var(--text-faint);}
+  .form-hint{font-size:12px;color:var(--text-faint);line-height:1.6;margin:0;}
+  .grp-checks{display:flex;flex-wrap:wrap;gap:8px;}
+  .grp-check{display:flex;align-items:center;gap:4px;font-size:13px;padding:6px 10px;border:1px solid var(--border);border-radius:999px;cursor:pointer;}
+  .grp-check small{color:var(--text-faint);font-size:10px;}
+  .grp-check input{accent-color:var(--accent);margin:0;}
 </style>
 </head>
 <body>
@@ -150,7 +220,7 @@
   <div class="topbar-left">
     <span class="site-title">Sokury</span>
     <span class="badge-admin">ADMIN</span>
-    <nav class="admin-nav"><a href="/">메인</a></nav>
+    <nav class="admin-nav"><a href="/">캘린더</a></nav>
   </div>
   <div class="topbar-right" id="auth-area"></div>
 </div>
@@ -167,7 +237,7 @@ const CATEGORIES = {
   regular:     { label:'정규',      color:'var(--cat-regular)' },
   ep:          { label:'EP',        color:'var(--cat-ep)' },
   single:      { label:'싱글',      color:'var(--cat-single)' },
-  mixtape:     { label:'믹스테잎',  color:'var(--cat-mixtape)' },
+  mixtape:     { label:'믹스테입',  color:'var(--cat-mixtape)' },
   compilation: { label:'컴필레이션',color:'var(--cat-compilation)' },
   concert:     { label:'콘서트',    color:'var(--cat-concert)' },
   physical:    { label:'피지컬',    color:'var(--cat-physical)' },
@@ -183,7 +253,7 @@ async function apiCall(query, options){
   const r = await fetch('/api/data?' + query, options);
   let data = null;
   try{ data = await r.json(); }catch(e){}
-  if(!r.ok) throw new Error((data && data.error) || ('서버 오류 (' + r.status + ')'));
+  if(!r.ok){ const err = new Error((data && data.error) || ('서버 오류 (' + r.status + ')')); err.data = data; throw err; }
   return data;
 }
 const JSON_HEADERS = {'Content-Type':'application/json'};
@@ -201,7 +271,7 @@ const Api = {
 let scheduleCache = [];
 let applicationCache = [];
 async function refreshCaches(){
-  [scheduleCache, applicationCache] = await Promise.all([Api.listSchedules(), Api.listApplications()]);
+  [scheduleCache, applicationCache] = await Promise.all([Api.listSchedules(), Api.listApplications(), loadArtistDb()]);
 }
 
 function fmtDateKR(iso){ const [y,m,d] = iso.split('-').map(Number); return `${y}년 ${m}월 ${d}일`; }
@@ -339,11 +409,13 @@ async function render(){
       <div class="stat-card"><div class="num">${scheduleCache.length}</div><div class="label">등록된 일정</div></div>
       <div class="stat-card"><div class="num">${applicationCache.length}</div><div class="label">총 신청 건수</div></div>
       <div class="stat-card"><div class="num">${pendingCount}</div><div class="label">대기중인 신청</div></div>
+      <div class="stat-card"><div class="num">${knownArtists.length}</div><div class="label">등록된 아티스트</div></div>
     </div>
     <div class="admin-top">
       <div class="admin-tabs">
         <button class="admin-tab-btn ${adminTab==='schedules'?'active':''}" data-tab="schedules" onclick="setTab('schedules')">일정 관리</button>
         <button class="admin-tab-btn ${adminTab==='applications'?'active':''}" data-tab="applications" onclick="setTab('applications')">신청 내역</button>
+        <button class="admin-tab-btn ${adminTab==='names'?'active':''}" data-tab="names" onclick="setTab('names')">이름 관리</button>
       </div>
     </div>
     <div id="admin-body"></div>
@@ -360,47 +432,22 @@ function setTab(t){
 function renderBody(){
   const body = document.getElementById('admin-body');
   if(!body) return;
-  if(adminTab==='schedules') renderSchedules(body); else renderApplications(body);
+  closeColFilter();
+  if(adminTab==='schedules') renderSchedules(body);
+  else if(adminTab==='names') renderNames(body);
+  else renderApplications(body);
 }
 
 /* =========================================================
    일정 관리
 ========================================================= */
-function renderSchedules(body){
-  const list = scheduleCache.slice().sort((a,b)=>a.startDate.localeCompare(b.startDate));
-  const rows = list.map(s=>{
-    const cat = CATEGORIES[s.category]||{label:s.category,color:'#888'};
-    return `<tr>
-      <td>${fmtDateRangeKR(s.startDate, s.endDate)}</td>
-      <td>${escapeHtml(s.artist)}</td>
-      <td><span class="table-cat-tag" style="background:${cat.color}">${escapeHtml(cat.label)}</span></td>
-      <td>${escapeHtml(s.title||'-')}${s.venue?`<div style="font-size:11px;color:var(--text-faint)">${escapeHtml(s.venue)}</div>`:''}</td>
-      <td>❤️ ${s.likes||0}</td>
-      <td class="row-actions">
-        <button onclick="openScheduleForm('${s.id}')">수정</button>
-        <button class="del" onclick="confirmDeleteSchedule('${s.id}')">삭제</button>
-      </td>
-    </tr>`;
-  }).join('');
-  body.innerHTML = `
-    <div class="admin-toolbar">
-      <div></div>
-      <button class="add-btn" onclick="openScheduleForm()">+ 새 일정 추가</button>
-    </div>
-    <div class="data-table-wrap">
-      <table class="data-table">
-        <thead><tr><th>기간</th><th>아티스트</th><th>카테고리</th><th>일정</th><th>좋아요</th><th>관리</th></tr></thead>
-        <tbody>${rows || `<tr><td colspan="6" class="empty-table">등록된 일정이 없습니다.</td></tr>`}</tbody>
-      </table>
-    </div>`;
-}
 function openScheduleForm(id){
   const s = id ? scheduleCache.find(x=>x.id===id) : null;
   openModal(`
     <div class="modal-tag" style="background:var(--accent)">${s?'일정 수정':'새 일정 추가'}</div>
     <div class="modal-form-grid">
       ${dateRangeFieldsHtml(s?s.startDate:'', s?s.endDate:'')}
-      <div class="field"><label>아티스트</label><input type="text" id="f-artist" value="${s?escapeHtml(s.artist):''}"></div>
+      ${artistFieldsHtml('f', s ? s.artists : [])}
       <div class="field"><label>카테고리</label>
         <select id="f-category">${ALL_CATS.map(k=>`<option value="${k}" ${s&&s.category===k?'selected':''}>${CATEGORIES[k].label}</option>`).join('')}</select>
       </div>
@@ -419,21 +466,21 @@ function openScheduleForm(id){
 async function saveScheduleForm(id){
   const startDate = readDateGroup('start');
   const endDate = readDateGroup('end');
-  const artist = document.getElementById('f-artist').value.trim();
+  const artists = readArtistFields('f');
   const category = document.getElementById('f-category').value;
   const title = document.getElementById('f-title').value.trim();
   const venue = category==='concert' ? document.getElementById('f-venue').value.trim() : '';
   const note = document.getElementById('f-note').value.trim();
   if(!startDate){ showToast('시작일을 올바르게 입력해주세요.'); return; }
   if(!endDate){ showToast('종료일을 올바르게 입력해주세요.'); return; }
-  if(!artist){ showToast('아티스트는 필수입니다.'); return; }
+  if(!artists.length){ showToast('아티스트를 1명 이상 입력해주세요.'); return; }
   if(!title){ showToast('일정을 입력해주세요.'); return; }
   if(endDate < startDate){ showToast('종료일이 시작일보다 빠를 수 없습니다.'); return; }
   const btn = document.getElementById('schedule-save-btn');
   if(btn) btn.disabled = true;
   try{
-    if(id){ await Api.updateSchedule(id, {startDate, endDate, artist, category, title, venue, note}); showToast('일정이 수정되었습니다.'); }
-    else{ await Api.createSchedule({startDate, endDate, artist, category, title, venue, note}); showToast('일정이 추가되었습니다.'); }
+    if(id){ await Api.updateSchedule(id, {startDate, endDate, artists, category, title, venue, note}); showToast('일정이 수정되었습니다.'); }
+    else{ await Api.createSchedule({startDate, endDate, artists, category, title, venue, note}); showToast('일정이 추가되었습니다.'); }
     await refreshCaches();
     closeModal();
     renderBody();
@@ -465,39 +512,6 @@ async function doDeleteSchedule(id){
 /* =========================================================
    신청 내역
 ========================================================= */
-function renderApplications(body){
-  let list = applicationCache.slice().sort((a,b)=>b.createdAt-a.createdAt);
-  if(adminAppFilter !== 'all') list = list.filter(a=>a.status===adminAppFilter);
-  const rows = list.map(a=>{
-    const cat = CATEGORIES[a.category]||{label:a.category,color:'#888'};
-    return `<tr class="clickable" onclick="openApplicationModal('${a.id}')">
-      <td><span class="status-badge ${a.status}">${APP_STATUS[a.status]||a.status}</span></td>
-      <td>${fmtDateRangeKR(a.startDate, a.endDate)}</td>
-      <td>${escapeHtml(a.artist)}</td>
-      <td><span class="table-cat-tag" style="background:${cat.color}">${escapeHtml(cat.label)}</span></td>
-      <td>${escapeHtml(a.name)}</td>
-      <td class="row-actions" onclick="event.stopPropagation()"><button class="del" onclick="confirmDeleteApplication('${a.id}')">삭제</button></td>
-    </tr>`;
-  }).join('');
-  body.innerHTML = `
-    <div class="admin-toolbar">
-      <div class="status-filter">
-        <select onchange="adminAppFilter=this.value; renderBody();">
-          <option value="all" ${adminAppFilter==='all'?'selected':''}>전체</option>
-          <option value="pending" ${adminAppFilter==='pending'?'selected':''}>대기</option>
-          <option value="uploaded" ${adminAppFilter==='uploaded'?'selected':''}>완료</option>
-          <option value="rejected" ${adminAppFilter==='rejected'?'selected':''}>거절</option>
-        </select>
-      </div>
-      <div></div>
-    </div>
-    <div class="data-table-wrap">
-      <table class="data-table">
-        <thead><tr><th>상태</th><th>기간</th><th>아티스트</th><th>카테고리</th><th>일정</th><th>관리</th></tr></thead>
-        <tbody>${rows || `<tr><td colspan="6" class="empty-table">신청 내역이 없습니다.</td></tr>`}</tbody>
-      </table>
-    </div>`;
-}
 function openApplicationModal(id){
   const a = applicationCache.find(x=>x.id===id);
   if(!a) return;
@@ -533,7 +547,7 @@ function openUploadFromApplication(appId){
     <div class="modal-tag" style="background:var(--accent)">일정으로 업로드</div>
     <div class="modal-form-grid">
       ${dateRangeFieldsHtml(a.startDate, a.endDate)}
-      <div class="field"><label>아티스트</label><input type="text" id="f-artist" value="${escapeHtml(a.artist)}"></div>
+      ${artistFieldsHtml('f', a.artists)}
       <div class="field"><label>카테고리</label>
         <select id="f-category">${ALL_CATS.map(k=>`<option value="${k}" ${a.category===k?'selected':''}>${CATEGORIES[k].label}</option>`).join('')}</select>
       </div>
@@ -552,14 +566,14 @@ function openUploadFromApplication(appId){
 async function confirmUploadApplication(appId){
   const startDate = readDateGroup('start');
   const endDate = readDateGroup('end');
-  const artist = document.getElementById('f-artist').value.trim();
+  const artists = readArtistFields('f');
   const category = document.getElementById('f-category').value;
   const title = document.getElementById('f-title').value.trim();
   const venue = category==='concert' ? document.getElementById('f-venue').value.trim() : '';
   const note = document.getElementById('f-note').value.trim();
   if(!startDate){ showToast('시작일을 올바르게 입력해주세요.'); return; }
   if(!endDate){ showToast('종료일을 올바르게 입력해주세요.'); return; }
-  if(!artist){ showToast('아티스트는 필수입니다.'); return; }
+  if(!artists.length){ showToast('아티스트를 1명 이상 입력해주세요.'); return; }
   if(!title){ showToast('일정을 입력해주세요.'); return; }
   if(endDate < startDate){ showToast('종료일이 시작일보다 빠를 수 없습니다.'); return; }
   const btn = document.getElementById('upload-btn');
@@ -567,7 +581,7 @@ async function confirmUploadApplication(appId){
   try{
     await Api.patchApplication(appId, {status:'uploaded'});
     try{
-      await Api.createSchedule({startDate, endDate, artist, category, title, venue, note});
+      await Api.createSchedule({startDate, endDate, artists, category, title, venue, note});
     }catch(e){
       await Api.patchApplication(appId, {status:'pending'}).catch(()=>{});
       throw e;
@@ -622,13 +636,491 @@ async function doDeleteApplication(id){
   }
 }
 
+/* =========================================================
+   아티스트 여러 명 입력 + 자동완성
+========================================================= */
+let knownArtists = [];   // [{ name, groups:[groupId] }]
+let knownGroups = [];    // [{ id, name, kind }]
+async function loadArtistDb(){
+  try{ const d = await apiCall('resource=artists'); knownArtists = d.artists || []; knownGroups = d.groups || []; }catch(e){}
+}
+function groupNamesOf(name){
+  const a = knownArtists.find(x=>x.name===name);
+  return a ? (a.groups||[]).map(id=>(knownGroups.find(g=>g.id===id)||{}).name).filter(Boolean) : [];
+}
+function artistRowHtml(i, val){
+  return `<div class="field artist-row"><label>아티스트 ${i+1}</label>
+    <div class="ac-wrap"><input type="text" class="artist-input" value="${escapeHtml(val||'')}" autocomplete="off" spellcheck="false">
+      ${i>0 ? `<button type="button" class="artist-remove" title="빼기" onclick="removeArtistRow(this)">✕</button>` : ''}
+      <div class="ac-list"></div></div></div>`;
+}
+function artistFieldsHtml(prefix, names){
+  const list = names && names.length ? names : [''];
+  return `<div class="artist-fields" id="${prefix}-artists">
+    ${list.map((n,i)=>artistRowHtml(i, n)).join('')}
+    <button type="button" class="artist-add" onclick="addArtistRow('${prefix}')">+ 아티스트 추가</button>
+  </div>`;
+}
+function relabelArtistRows(box){
+  box.querySelectorAll('.artist-row').forEach((row,i)=>{ row.querySelector('label').textContent = `아티스트 ${i+1}`; });
+}
+function addArtistRow(prefix){
+  const box = document.getElementById(prefix+'-artists');
+  const n = box.querySelectorAll('.artist-row').length;
+  box.querySelector('.artist-add').insertAdjacentHTML('beforebegin', artistRowHtml(n, ''));
+  const rows = box.querySelectorAll('.artist-row');
+  rows[rows.length-1].querySelector('input').focus();
+}
+function removeArtistRow(btn){
+  const box = btn.closest('.artist-fields');
+  btn.closest('.artist-row').remove();
+  relabelArtistRows(box);
+}
+function readArtistFields(prefix){
+  const out = [];
+  document.querySelectorAll(`#${prefix}-artists .artist-input`).forEach(el=>{
+    const v = el.value.replace(/\s+/g,' ').trim();
+    if(v && !out.includes(v)) out.push(v);
+  });
+  return out;
+}
+// 자동완성: 입력하는 글자가 들어간 기존 아티스트를 바로 아래에 보여줌
+function acSuggest(input){
+  const list = input.parentElement.querySelector('.ac-list');
+  const q = input.value.trim().toLowerCase();
+  if(!q){ list.classList.remove('show'); list.innerHTML=''; return; }
+  const box = input.closest('.artist-fields');
+  const taken = box ? Array.from(box.querySelectorAll('.artist-input')).filter(x=>x!==input).map(x=>x.value.trim()) : [];
+  const hits = knownArtists.map(a=>a.name)
+    .filter(n=> n.toLowerCase().includes(q) && !taken.includes(n))
+    .sort((a,b)=> (b.toLowerCase().startsWith(q)) - (a.toLowerCase().startsWith(q)) || a.localeCompare(b,'ko'))
+    .slice(0, 8);
+  if(!hits.length || (hits.length===1 && hits[0]===input.value.trim())){ list.classList.remove('show'); list.innerHTML=''; return; }
+  list.innerHTML = hits.map((n,i)=>{
+    const g = groupNamesOf(n);
+    return `<div class="ac-item ${i===0?'active':''}" data-name="${escapeHtml(n)}"><span>${escapeHtml(n)}</span>${g.length?`<small>${escapeHtml(g.join(', '))}</small>`:''}</div>`;
+  }).join('');
+  list.classList.add('show');
+}
+function acPick(input, name){
+  input.value = name;
+  const list = input.parentElement.querySelector('.ac-list');
+  list.classList.remove('show'); list.innerHTML='';
+}
+document.addEventListener('input', e=>{ if(e.target.classList && e.target.classList.contains('artist-input')) acSuggest(e.target); });
+document.addEventListener('focusin', e=>{ if(e.target.classList && e.target.classList.contains('artist-input')) acSuggest(e.target); });
+document.addEventListener('focusout', e=>{
+  if(e.target.classList && e.target.classList.contains('artist-input')){
+    const list = e.target.parentElement.querySelector('.ac-list');
+    setTimeout(()=>{ list.classList.remove('show'); }, 150);
+  }
+});
+document.addEventListener('mousedown', e=>{
+  const item = e.target.closest && e.target.closest('.ac-item');
+  if(!item) return;
+  e.preventDefault();
+  acPick(item.closest('.ac-wrap').querySelector('.artist-input'), item.getAttribute('data-name'));
+});
+document.addEventListener('keydown', e=>{
+  if(!(e.target.classList && e.target.classList.contains('artist-input'))) return;
+  const list = e.target.parentElement.querySelector('.ac-list');
+  if(!list.classList.contains('show')) return;
+  const items = Array.from(list.querySelectorAll('.ac-item'));
+  let i = items.findIndex(x=>x.classList.contains('active'));
+  if(e.key==='ArrowDown' || e.key==='ArrowUp'){
+    e.preventDefault();
+    if(i>-1) items[i].classList.remove('active');
+    i = e.key==='ArrowDown' ? (i+1)%items.length : (i-1+items.length)%items.length;
+    items[i].classList.add('active');
+  } else if(e.key==='Enter' && i>-1){
+    e.preventDefault(); acPick(e.target, items[i].getAttribute('data-name'));
+  } else if(e.key==='Escape'){
+    list.classList.remove('show');
+  }
+});
+
+/* =========================================================
+   엑셀식 열 필터 (모든 표 공통)
+========================================================= */
+const tableState = {};   // 표별 { filters:{열: Set}, sort:{col,dir} }
+const tableCtx = {};     // 표별 { cols, rows, rerender }
+function tState(key){ return tableState[key] || (tableState[key] = { filters:{}, sort:null }); }
+function colValues(c, r){
+  const v = c.values ? c.values(r) : [c.text(r)];
+  const out = (v && v.length ? v : ['']).map(x=> (x===''||x==null) ? '(비어 있음)' : String(x));
+  return out;
+}
+function cellText(c, r){
+  const raw = (c.values ? c.values(r) : [c.text(r)]).filter(x=> x!=='' && x!=null);
+  return raw.length ? escapeHtml(raw.join(', ')) : '<span class="muted">-</span>';
+}
+function passOthers(key, cols, r, exceptKey){
+  const st = tState(key);
+  return cols.every(c=> c.key===exceptKey || !st.filters[c.key] || colValues(c,r).some(v=>st.filters[c.key].has(v)));
+}
+function applyTable(key, cols, rows, defaultSort){
+  const st = tState(key);
+  let out = rows.filter(r=> passOthers(key, cols, r, null));
+  const sort = st.sort ? { c: cols.find(x=>x.key===st.sort.col), dir: st.sort.dir } : null;
+  if(sort && sort.c){
+    const sv = sort.c.sort || (r=>colValues(sort.c,r)[0]);
+    out = out.slice().sort((a,b)=>{
+      const x = sv(a), y = sv(b);
+      const d = (typeof x==='number' && typeof y==='number') ? x-y : String(x).localeCompare(String(y),'ko',{numeric:true});
+      return sort.dir==='desc' ? -d : d;
+    });
+  } else if(defaultSort){ out = out.slice().sort(defaultSort); }
+  return out;
+}
+function dataTableHtml(key, cols, rows, opts){
+  tableCtx[key] = { cols, rows, rerender: opts.rerender };
+  const st = tState(key);
+  const shown = applyTable(key, cols, rows, opts.defaultSort);
+  const nFilters = Object.keys(st.filters).length;
+  const head = cols.map(c=>{
+    if(c.filter===false) return `<th>${c.label}</th>`;
+    const sorted = st.sort && st.sort.col===c.key;
+    const on = st.filters[c.key] || sorted;
+    return `<th><button type="button" class="th-filter ${on?'on':''}" onclick="openColFilter(event,'${key}','${c.key}')">${c.label}<span class="th-caret">${sorted ? (st.sort.dir==='asc'?'▲':'▼') : (st.filters[c.key]?'⏷':'▾')}</span></button></th>`;
+  }).join('');
+  const body = shown.map(r=> opts.row(r, cols.map(c=>`<td${c.stop?' onclick="event.stopPropagation()"':''}${c.tdClass?` class="${c.tdClass}"`:''}>${c.html ? c.html(r) : cellText(c,r)}</td>`).join(''))).join('');
+  return `${nFilters ? `<div class="filter-note">필터 ${nFilters}개 적용 중 · ${shown.length} / ${rows.length}건 <button type="button" onclick="clearTableFilters('${key}')">모두 해제</button></div>` : ''}
+    <div class="data-table-wrap"><table class="data-table"><thead><tr>${head}</tr></thead>
+    <tbody>${body || `<tr><td colspan="${cols.length}" class="empty-table">${rows.length ? '필터 조건에 맞는 항목이 없어요.' : opts.empty}</td></tr>`}</tbody></table></div>`;
+}
+let cfDraft = null;
+function closeColFilter(){ const el = document.getElementById('col-filter'); if(el) el.remove(); cfDraft = null; }
+document.addEventListener('click', closeColFilter);
+function openColFilter(ev, key, colKey){
+  ev.stopPropagation();
+  const wasSame = cfDraft && cfDraft.key===key && cfDraft.colKey===colKey;
+  closeColFilter();
+  if(wasSame) return;
+  const ctx = tableCtx[key], c = ctx.cols.find(x=>x.key===colKey), st = tState(key);
+  const counts = new Map();
+  ctx.rows.filter(r=>passOthers(key, ctx.cols, r, colKey))
+    .forEach(r=> new Set(colValues(c,r)).forEach(v=> counts.set(v,(counts.get(v)||0)+1)));
+  if(st.filters[colKey]) st.filters[colKey].forEach(v=>{ if(!counts.has(v)) counts.set(v,0); });
+  const vals = Array.from(counts.keys()).sort(c.valueSort || ((a,b)=>a.localeCompare(b,'ko',{numeric:true})));
+  const cur = st.filters[colKey];
+  cfDraft = { key, colKey, vals, counts, checked: new Set(cur ? vals.filter(v=>cur.has(v)) : vals), visible: vals };
+  const el = document.createElement('div');
+  el.id = 'col-filter'; el.className = 'col-filter';
+  el.onclick = e=> e.stopPropagation();
+  el.innerHTML = `
+    <div class="cf-sort">
+      <button type="button" onclick="setTableSort('asc')">↑ 오름차순 정렬</button>
+      <button type="button" onclick="setTableSort('desc')">↓ 내림차순 정렬</button>
+    </div>
+    <input type="search" class="cf-search" placeholder="값 검색" oninput="drawCfList(this.value)">
+    <div class="cf-list" id="cf-list"></div>
+    <div class="cf-actions">
+      <button type="button" class="btn-ghost" onclick="clearColFilter()">필터 해제</button>
+      <button type="button" class="btn-primary" onclick="applyColFilter()">확인</button>
+    </div>`;
+  document.body.appendChild(el);
+  const b = ev.currentTarget.getBoundingClientRect();
+  el.style.top = (b.bottom + window.scrollY + 6) + 'px';
+  el.style.left = Math.max(8, Math.min(b.left + window.scrollX, window.scrollX + document.documentElement.clientWidth - el.offsetWidth - 8)) + 'px';
+  drawCfList('');
+  el.querySelector('.cf-search').focus();
+}
+function drawCfList(q){
+  const d = cfDraft; if(!d) return;
+  const ql = q.trim().toLowerCase();
+  d.visible = d.vals.filter(v=> !ql || v.toLowerCase().includes(ql));
+  const allOn = d.visible.length && d.visible.every(v=>d.checked.has(v));
+  document.getElementById('cf-list').innerHTML = d.visible.length
+    ? `<label class="cf-item cf-all"><input type="checkbox" ${allOn?'checked':''} onchange="toggleCfAll(this.checked)"><span>(모두 선택)</span></label>`
+      + d.visible.map(v=>{ const i = d.vals.indexOf(v); return `<label class="cf-item"><input type="checkbox" ${d.checked.has(v)?'checked':''} onchange="toggleCf(${i},this.checked)"><span>${escapeHtml(v)}</span><small>${d.counts.get(v)}</small></label>`; }).join('')
+    : `<div class="cf-empty">일치하는 값이 없어요</div>`;
+}
+function toggleCf(i, on){ const v = cfDraft.vals[i]; on ? cfDraft.checked.add(v) : cfDraft.checked.delete(v); drawCfList(document.querySelector('.cf-search').value); }
+function toggleCfAll(on){ cfDraft.visible.forEach(v=> on ? cfDraft.checked.add(v) : cfDraft.checked.delete(v)); drawCfList(document.querySelector('.cf-search').value); }
+function applyColFilter(){
+  const d = cfDraft, st = tState(d.key);
+  if(d.vals.every(v=>d.checked.has(v))) delete st.filters[d.colKey];
+  else st.filters[d.colKey] = new Set(d.checked);
+  const k = d.key; closeColFilter(); tableCtx[k].rerender();
+}
+function clearColFilter(){ const d = cfDraft, st = tState(d.key); delete st.filters[d.colKey]; if(st.sort && st.sort.col===d.colKey) st.sort = null; const k = d.key; closeColFilter(); tableCtx[k].rerender(); }
+function setTableSort(dir){ const d = cfDraft; tState(d.key).sort = { col: d.colKey, dir }; const k = d.key; closeColFilter(); tableCtx[k].rerender(); }
+function clearTableFilters(key){ tState(key).filters = {}; tState(key).sort = null; tableCtx[key].rerender(); }
+
+const catSortIdx = (label)=> { const i = ALL_CATS.findIndex(k=>CATEGORIES[k].label===label); return i<0 ? 99 : i; };
+const catValueSort = (a,b)=> catSortIdx(a)-catSortIdx(b);
+function shortRange(s){
+  const f = iso=>{ const [y,m,d]=iso.split('-'); return `${y}.${m}.${d}`; };
+  if(s.startDate===s.endDate) return f(s.startDate);
+  const [y1,m1] = s.startDate.split('-'), [y2,m2,d2] = s.endDate.split('-');
+  return `${f(s.startDate)}~${y1===y2 ? (m1===m2 ? d2 : `${m2}.${d2}`) : f(s.endDate)}`;
+}
+
+/* =========================================================
+   일정 관리: 오늘 / 월별 보기
+========================================================= */
+let schedView = 'today';
+const ymOf = iso => iso.slice(0,7);
+function monthsBetween(a, b){
+  const out = []; let [y,m] = a.split('-').map(Number); const [y2,m2] = b.split('-').map(Number);
+  while(y<y2 || (y===y2 && m<=m2)){ out.push(`${y}-${String(m).padStart(2,'0')}`); m++; if(m>12){ m=1; y++; } }
+  return out;
+}
+function overlaps(s, from, to){ return s.startDate <= to && s.endDate >= from; }
+function schedulesInMonth(ym){ return scheduleCache.filter(s=> overlaps(s, ym+'-01', ym+'-31')); }
+function scheduleMonths(){
+  const cur = ymOf(todayISO());
+  if(!scheduleCache.length) return [{ ym:cur, n:0 }];
+  let min = cur, max = cur;
+  scheduleCache.forEach(s=>{ if(ymOf(s.startDate)<min) min = ymOf(s.startDate); if(ymOf(s.endDate)>max) max = ymOf(s.endDate); });
+  return monthsBetween(min, max).map(ym=>({ ym, n: schedulesInMonth(ym).length }));
+}
+function todayISO(){ return fmtDateISO(new Date()); }
+function viewRows(){
+  if(schedView==='today'){ const t = todayISO(); return scheduleCache.filter(s=>overlaps(s,t,t)); }
+  if(schedView==='all') return scheduleCache.slice();
+  return schedulesInMonth(schedView);
+}
+function stepMonth(dir){
+  const months = scheduleMonths().filter(x=>x.n>0).map(x=>x.ym);
+  if(!months.length) return;
+  const base = (schedView==='today' || schedView==='all') ? ymOf(todayISO()) : schedView;
+  const next = dir>0 ? months.find(m=>m>base) : months.slice().reverse().find(m=>m<base);
+  if(next){ schedView = next; renderBody(); } else showToast(dir>0 ? '다음 일정이 있는 달이 없어요.' : '이전 일정이 있는 달이 없어요.');
+}
+
+function renderSchedules(body){
+  const months = scheduleMonths();
+  const t = new Date();
+  const todayN = viewRowsFor('today').length;
+  const viewLabel = schedView==='today' ? `오늘(${t.getMonth()+1}월 ${t.getDate()}일) 일정`
+    : schedView==='all' ? '전체 일정' : `${schedView.slice(0,4)}년 ${+schedView.slice(5)}월 일정`;
+  const rows = viewRows();
+  const inMonth = schedView!=='today' && schedView!=='all';
+  const mFrom = inMonth ? schedView+'-01' : null, mTo = inMonth ? schedView+'-31' : null;
+  const cols = [
+    { key:'date', label:'기간', text:s=>shortRange(s), sort:s=>s.startDate+s.endDate,
+      html:s=>`${shortRange(s)}${inMonth && s.startDate<mFrom ? '<span class="carry">이전 달부터</span>' : ''}${inMonth && s.endDate>mTo ? '<span class="carry">다음 달까지</span>' : ''}` },
+    { key:'artist', label:'아티스트', values:s=>s.artists, sort:s=>s.artists.join(', '), html:s=>s.artists.map(escapeHtml).join('<span class="sep">, </span>') },
+    { key:'cat', label:'카테고리', text:s=>(CATEGORIES[s.category]||{label:s.category}).label, valueSort:catValueSort, sort:s=>ALL_CATS.indexOf(s.category),
+      html:s=>{ const c = CATEGORIES[s.category]||{label:s.category,color:'#888'}; return `<span class="table-cat-tag" style="background:${c.color}">${escapeHtml(c.label)}</span>`; } },
+    { key:'title', label:'일정', text:s=>s.title||'' },
+    { key:'venue', label:'공연장', text:s=>s.venue||'' },
+    { key:'likes', label:'좋아요', text:s=>String(s.likes||0), sort:s=>s.likes||0, valueSort:(a,b)=>(+a||0)-(+b||0), html:s=>`❤️ ${s.likes||0}` },
+    { key:'act', label:'관리', filter:false, html:s=>`<div class="row-actions"><button onclick="openScheduleForm('${s.id}')">수정</button><button class="del" onclick="confirmDeleteSchedule('${s.id}')">삭제</button></div>` },
+  ];
+  body.innerHTML = `
+    <div class="admin-toolbar">
+      <div class="view-picker">
+        <button type="button" class="view-step" onclick="stepMonth(-1)" title="이전 일정이 있는 달">‹</button>
+        <select onchange="schedView=this.value; renderBody();">
+          <option value="today" ${schedView==='today'?'selected':''}>오늘 (${t.getMonth()+1}월 ${t.getDate()}일) · ${todayN}건</option>
+          <optgroup label="월별">
+            ${months.map(x=>`<option value="${x.ym}" ${schedView===x.ym?'selected':''} ${x.n?'':'disabled'}>${x.ym.slice(0,4)}년 ${+x.ym.slice(5)}월 · ${x.n ? x.n+'건' : '일정 없음'}</option>`).join('')}
+          </optgroup>
+          <option value="all" ${schedView==='all'?'selected':''}>전체 일정 · ${scheduleCache.length}건</option>
+        </select>
+        <button type="button" class="view-step" onclick="stepMonth(1)" title="다음 일정이 있는 달">›</button>
+        <span class="view-label">${viewLabel} ${rows.length}건</span>
+      </div>
+      <button class="add-btn" onclick="openScheduleForm()">+ 새 일정 추가</button>
+    </div>
+    ${dataTableHtml('schedules', cols, rows, {
+      rerender: renderBody,
+      defaultSort: (a,b)=> a.startDate.localeCompare(b.startDate),
+      empty: schedView==='today' ? '오늘은 일정이 없어요. 위 드롭다운에서 월을 골라 보세요.' : '일정이 없어요.',
+      row: (s, cells)=>`<tr>${cells}</tr>`,
+    })}`;
+}
+function viewRowsFor(v){ const prev = schedView; schedView = v; const r = viewRows(); schedView = prev; return r; }
+
+/* =========================================================
+   신청 내역
+========================================================= */
+function renderApplications(body){
+  const cols = [
+    { key:'status', label:'상태', text:a=>APP_STATUS[a.status]||a.status, valueSort:(x,y)=>['대기','완료','거절'].indexOf(x)-['대기','완료','거절'].indexOf(y),
+      html:a=>`<span class="status-badge ${a.status}">${APP_STATUS[a.status]||a.status}</span>` },
+    { key:'date', label:'기간', text:a=>shortRange(a), sort:a=>a.startDate },
+    { key:'artist', label:'아티스트', values:a=>a.artists, sort:a=>a.artists.join(', '), html:a=>a.artists.map(escapeHtml).join('<span class="sep">, </span>') },
+    { key:'cat', label:'카테고리', text:a=>(CATEGORIES[a.category]||{label:a.category}).label, valueSort:catValueSort,
+      html:a=>{ const c = CATEGORIES[a.category]||{label:a.category,color:'#888'}; return `<span class="table-cat-tag" style="background:${c.color}">${escapeHtml(c.label)}</span>`; } },
+    { key:'name', label:'일정', text:a=>a.name||'' },
+    { key:'owner', label:'신청 계정', text:a=>a.ownerEmail||'로그인 없이 신청' },
+    { key:'created', label:'신청일', text:a=>shortRange({startDate:fmtDateISO(new Date(a.createdAt)), endDate:fmtDateISO(new Date(a.createdAt))}), sort:a=>a.createdAt },
+    { key:'act', label:'관리', filter:false, stop:true, html:a=>`<div class="row-actions"><button class="del" onclick="confirmDeleteApplication('${a.id}')">삭제</button></div>` },
+  ];
+  body.innerHTML = dataTableHtml('applications', cols, applicationCache, {
+    rerender: renderBody,
+    defaultSort: (a,b)=> b.createdAt - a.createdAt,
+    empty: '신청 내역이 없습니다.',
+    row: (a, cells)=>`<tr class="clickable" onclick="openApplicationModal('${a.id}')">${cells}</tr>`,
+  });
+}
+
+/* =========================================================
+   이름 관리
+========================================================= */
+let namesList = [];
+function actsOf(name){ return scheduleCache.filter(s=>s.artists.includes(name)).sort((a,b)=>a.startDate.localeCompare(b.startDate)); }
+function membersOf(gid){ return knownArtists.filter(a=>(a.groups||[]).includes(gid)).map(a=>a.name); }
+function renderNames(body){
+  namesList = knownArtists.slice().sort((a,b)=>a.name.localeCompare(b.name,'ko'));
+  const idx = new Map(namesList.map((a,i)=>[a.name,i]));
+  const gname = id => (knownGroups.find(g=>g.id===id)||{}).name;
+  const cols = [
+    { key:'name', label:'아티스트', text:a=>a.name, html:a=>`<b>${escapeHtml(a.name)}</b>` },
+    { key:'groups', label:'그룹', values:a=>(a.groups||[]).map(gname).filter(Boolean),
+      html:a=>(a.groups||[]).map(id=>knownGroups.find(g=>g.id===id)).filter(Boolean).map(g=>`<span class="grp-chip" onclick="event.stopPropagation(); openGroupModal('${g.id}')">${escapeHtml(g.name)}</span>`).join(' ') || '<span class="muted">-</span>' },
+    { key:'count', label:'활동 수', text:a=>String(actsOf(a.name).length), sort:a=>actsOf(a.name).length, valueSort:(x,y)=>(+x)-(+y) },
+    { key:'acts', label:'활동 내역', tdClass:'acts-cell', values:a=>Array.from(new Set(actsOf(a.name).map(s=>(CATEGORIES[s.category]||{label:s.category}).label))), valueSort:catValueSort,
+      sort:a=>(actsOf(a.name)[0]||{startDate:'9999'}).startDate,
+      html:a=>{ const acts = actsOf(a.name); return acts.length ? `<div class="acts">${acts.map(s=>{ const c = CATEGORIES[s.category]||{label:s.category,color:'#888'};
+        return `<button type="button" class="act" onclick="openScheduleForm('${s.id}')" title="눌러서 이 일정 수정"><span class="dot" style="background:${c.color}"></span>${shortRange(s)} · ${escapeHtml(c.label)}${s.title?' · '+escapeHtml(s.title):''}${s.artists.length>1?` <small>(${escapeHtml(s.artists.filter(x=>x!==a.name).join(', '))}와 함께)</small>`:''}</button>`; }).join('')}</div>` : '<span class="muted">활동 없음</span>'; } },
+    { key:'act', label:'관리', filter:false, html:a=>{ const i = idx.get(a.name);
+      return `<div class="row-actions"><button onclick="openRenameArtist(${i})">이름 수정</button><button onclick="openArtistGroups(${i})">그룹</button><button class="del" onclick="confirmDeleteArtist(${i})">삭제</button></div>`; } },
+  ];
+  body.innerHTML = `
+    <div class="admin-toolbar">
+      <div class="group-bar">
+        <span class="group-bar-label">그룹</span>
+        ${knownGroups.length ? knownGroups.slice().sort((a,b)=>a.name.localeCompare(b.name,'ko')).map(g=>`<button type="button" class="grp-chip big" onclick="openGroupModal('${g.id}')"><small>${escapeHtml(g.kind)}</small> ${escapeHtml(g.name)} <small>${membersOf(g.id).length}명</small></button>`).join('') : '<span class="muted">아직 그룹이 없어요</span>'}
+      </div>
+      <div style="display:flex;gap:8px">
+        <button class="btn-ghost" onclick="openGroupModal(null)">+ 그룹 만들기</button>
+        <button class="add-btn" onclick="openAddArtist()">+ 아티스트 추가</button>
+      </div>
+    </div>
+    ${dataTableHtml('names', cols, namesList, {
+      rerender: renderBody,
+      defaultSort: (a,b)=> a.name.localeCompare(b.name,'ko'),
+      empty: '등록된 아티스트가 없어요. 일정을 추가하면 자동으로 등록돼요.',
+      row: (a, cells)=>`<tr>${cells}</tr>`,
+    })}`;
+}
+async function reloadAfter(msg){ await refreshCaches(); closeModal(); render(); if(msg) showToast(msg); }
+function openAddArtist(){
+  openModal(`<div class="modal-tag" style="background:var(--accent)">아티스트 추가</div>
+    <div class="modal-form-grid"><div class="field"><label>아티스트 이름</label><input type="text" id="na-name" autocomplete="off"></div></div>
+    <div class="modal-form-actions"><button class="btn-ghost" onclick="closeModal()">취소</button><button class="btn-primary" onclick="doAddArtist()">추가</button></div>`);
+  document.getElementById('na-name').focus();
+}
+async function doAddArtist(){
+  const name = document.getElementById('na-name').value.trim();
+  if(!name){ showToast('이름을 입력해주세요.'); return; }
+  try{ await apiCall('resource=artists&action=add', {method:'POST', headers:JSON_HEADERS, body:JSON.stringify({name})}); await reloadAfter('아티스트를 추가했어요.'); }
+  catch(e){ showToast(e.message); }
+}
+function openRenameArtist(i){
+  const a = namesList[i]; if(!a) return;
+  const n = actsOf(a.name).length;
+  openModal(`<div class="modal-tag" style="background:var(--accent)">이름 수정</div>
+    <div class="modal-form-grid">
+      <div class="field"><label>현재 이름</label><input type="text" value="${escapeHtml(a.name)}" disabled></div>
+      <div class="field"><label>새 이름</label><input type="text" id="rn-name" value="${escapeHtml(a.name)}" autocomplete="off"></div>
+      <p class="form-hint">이 아티스트가 들어간 일정 ${n}개에 한 번에 반영돼요. 이미 있는 다른 아티스트 이름으로 바꾸면 두 아티스트가 하나로 합쳐져요.</p>
+    </div>
+    <div class="modal-form-actions"><button class="btn-ghost" onclick="closeModal()">취소</button><button class="btn-primary" onclick="doRenameArtist(${i})">저장</button></div>`);
+  const el = document.getElementById('rn-name'); el.focus(); el.select();
+}
+async function doRenameArtist(i){
+  const a = namesList[i], to = document.getElementById('rn-name').value.trim();
+  if(!to || to===a.name){ closeModal(); return; }
+  const exists = knownArtists.some(x=>x.name===to);
+  if(exists && !confirm(`'${to}'은(는) 이미 있는 아티스트예요. '${a.name}'을(를) '${to}'(으)로 합칠까요?`)) return;
+  try{
+    const r = await apiCall('resource=artists&action=rename', {method:'POST', headers:JSON_HEADERS, body:JSON.stringify({from:a.name, to})});
+    await reloadAfter(`${r.merged?'합쳤어요':'이름을 바꿨어요'} · 일정 ${r.schedulesUpdated}개 반영`);
+  }catch(e){ showToast(e.message); }
+}
+function groupCheckboxesHtml(selected){
+  const gs = knownGroups.slice().sort((a,b)=>a.name.localeCompare(b.name,'ko'));
+  return gs.length ? gs.map(g=>`<label class="grp-check"><input type="checkbox" value="${g.id}" ${selected.includes(g.id)?'checked':''}> <small>${escapeHtml(g.kind)}</small> ${escapeHtml(g.name)}</label>`).join('') : '<p class="form-hint">아직 그룹이 없어요. 아래에서 새로 만들 수 있어요.</p>';
+}
+function openArtistGroups(i){
+  const a = namesList[i]; if(!a) return;
+  openModal(`<div class="modal-tag" style="background:var(--accent)">${escapeHtml(a.name)} · 그룹</div>
+    <div class="modal-form-grid">
+      <div class="grp-checks" id="ag-checks">${groupCheckboxesHtml(a.groups||[])}</div>
+      <div class="field"><label>새 그룹 만들어서 넣기 (선택)</label>
+        <div style="display:flex;gap:8px"><select id="ag-kind" style="width:110px">${['그룹','레이블','기타'].map(k=>`<option>${k}</option>`).join('')}</select><input type="text" id="ag-new" placeholder="그룹 이름" autocomplete="off"></div>
+      </div>
+    </div>
+    <div class="modal-form-actions"><button class="btn-ghost" onclick="closeModal()">취소</button><button class="btn-primary" onclick="doArtistGroups(${i})">저장</button></div>`, {wide:true});
+}
+async function doArtistGroups(i){
+  const a = namesList[i];
+  const ids = Array.from(document.querySelectorAll('#ag-checks input:checked')).map(x=>x.value);
+  const newName = document.getElementById('ag-new').value.trim();
+  try{
+    if(newName){
+      const g = await apiCall('resource=groups', {method:'POST', headers:JSON_HEADERS, body:JSON.stringify({name:newName, kind:document.getElementById('ag-kind').value})});
+      ids.push(g.id);
+    }
+    await apiCall('resource=artists&action=setgroups', {method:'POST', headers:JSON_HEADERS, body:JSON.stringify({name:a.name, groups:ids})});
+    await reloadAfter('그룹을 저장했어요.');
+  }catch(e){ showToast(e.message); }
+}
+function confirmDeleteArtist(i){
+  const a = namesList[i]; if(!a) return;
+  const n = actsOf(a.name).length;
+  openModal(`<div class="modal-tag" style="background:var(--danger)">아티스트 삭제</div>
+    <div class="modal-rows"><div class="modal-row"><span class="modal-value small"><b>${escapeHtml(a.name)}</b>을(를) 삭제할까요?${n?` 함께 등록된 일정 ${n}개에서도 이 이름이 빠져요.`:''}</span></div></div>
+    <div id="del-block"></div>
+    <div class="modal-form-actions"><button class="btn-ghost" onclick="closeModal()">취소</button><button class="btn-danger" onclick="doDeleteArtist(${i})">삭제</button></div>`);
+}
+async function doDeleteArtist(i){
+  const a = namesList[i];
+  try{ await apiCall('resource=artists&action=delete', {method:'POST', headers:JSON_HEADERS, body:JSON.stringify({name:a.name})}); await reloadAfter('삭제했어요.'); }
+  catch(e){
+    const ids = (e.data && e.data.scheduleIds) || [];
+    const box = document.getElementById('del-block');
+    if(box && ids.length){
+      box.innerHTML = `<p class="form-hint" style="color:var(--danger)">${escapeHtml(e.message)}</p><div class="acts">${ids.map(id=>{ const s = scheduleCache.find(x=>x.id===id); if(!s) return ''; const c = CATEGORIES[s.category]||{label:s.category,color:'#888'};
+        return `<button type="button" class="act" onclick="openScheduleForm('${s.id}')"><span class="dot" style="background:${c.color}"></span>${shortRange(s)} · ${escapeHtml(c.label)}${s.title?' · '+escapeHtml(s.title):''}</button>`; }).join('')}</div>`;
+    } else showToast(e.message);
+  }
+}
+function openGroupModal(id){
+  const g = id ? knownGroups.find(x=>x.id===id) : null;
+  openModal(`<div class="modal-tag" style="background:var(--accent)">${g?'그룹 수정':'새 그룹'}</div>
+    <div class="modal-form-grid">
+      <div class="field"><label>종류</label><select id="gm-kind">${['그룹','레이블','기타'].map(k=>`<option ${g&&g.kind===k?'selected':''}>${k}</option>`).join('')}</select></div>
+      <div class="field"><label>그룹 이름</label><input type="text" id="gm-name" value="${g?escapeHtml(g.name):''}" autocomplete="off"></div>
+      <div class="field"><label>소속 아티스트</label></div>
+      ${artistFieldsHtml('gm', g ? membersOf(g.id) : [])}
+      <p class="form-hint">메인 페이지에서 그룹 이름으로 검색하면 소속 아티스트 일정이 모두 나와요.</p>
+    </div>
+    <div class="modal-form-actions">
+      ${g?`<button class="btn-danger" style="margin-right:auto" onclick="doDeleteGroup('${g.id}')">그룹 삭제</button>`:''}
+      <button class="btn-ghost" onclick="closeModal()">취소</button><button class="btn-primary" onclick="doSaveGroup(${g?`'${g.id}'`:'null'})">저장</button>
+    </div>`, {wide:true});
+}
+async function doSaveGroup(id){
+  const name = document.getElementById('gm-name').value.trim(), kind = document.getElementById('gm-kind').value;
+  if(!name){ showToast('그룹 이름을 입력해주세요.'); return; }
+  const members = readArtistFields('gm');
+  try{
+    let gid = id;
+    if(id) await apiCall('resource=groups&id='+encodeURIComponent(id), {method:'PUT', headers:JSON_HEADERS, body:JSON.stringify({name, kind})});
+    else gid = (await apiCall('resource=groups', {method:'POST', headers:JSON_HEADERS, body:JSON.stringify({name, kind})})).id;
+    await apiCall('resource=groups&action=members&id='+encodeURIComponent(gid), {method:'POST', headers:JSON_HEADERS, body:JSON.stringify({members})});
+    await reloadAfter('그룹을 저장했어요.');
+  }catch(e){ showToast(e.message); }
+}
+async function doDeleteGroup(id){
+  if(!confirm('이 그룹을 삭제할까요? 아티스트는 그대로 남아요.')) return;
+  try{ await apiCall('resource=groups&id='+encodeURIComponent(id), {method:'DELETE'}); await reloadAfter('그룹을 삭제했어요.'); }
+  catch(e){ showToast(e.message); }
+}
+
 /* ---- 로그인 상태 (오른쪽 위) ---- */
 async function renderAuthArea(){
   const area = document.getElementById('auth-area');
   let user = null;
   try{ user = (await apiCall('resource=auth')).user; }catch(e){}
   if(user){
-    const pic = user.picture ? `<img src="${escapeHtml(user.picture)}" alt="" referrerpolicy="no-referrer">` : '';
+    const pic = `<span class="avatar">${escapeHtml(Array.from(user.name||user.email||'?')[0].toUpperCase())}</span>`;
     area.innerHTML = `<div class="user-chip">${pic}<span class="name">${escapeHtml(user.name||user.email)}</span>
       <button class="logout-btn" onclick="adminLogout()">로그아웃</button></div>`;
   } else {

@@ -10,14 +10,14 @@
 <meta property="og:title" content="Sokury">
 <meta property="og:description" content="좋아하는 아티스트의 앨범, LP, 콘서트 일정을 한 눈에">
 <meta property="og:url" content="https://www.sokury.kr/">
-<meta property="og:image" content="https://www.sokury.kr/og-default.png">
+<meta property="og:image" content="https://www.sokury.kr/og/site">
 <meta property="og:image:width" content="1200">
 <meta property="og:image:height" content="630">
 <meta property="og:locale" content="ko_KR">
 <meta name="twitter:card" content="summary_large_image">
 <meta name="twitter:title" content="Sokury">
 <meta name="twitter:description" content="좋아하는 아티스트의 앨범, LP, 콘서트 일정을 한 눈에">
-<meta name="twitter:image" content="https://www.sokury.kr/og-default.png">
+<meta name="twitter:image" content="https://www.sokury.kr/og/site">
 <meta name="theme-color" content="#6C5CFC">
 <meta name="naver-site-verification" content="5426b25a4843ebbcd3735bf6a1d4b7ea7b68710f" />
 <meta name="google-site-verification" content="iZpWi52MMQhVfnNFhfhrj9i3PdsjxlZ8xvjvI_5agd8" />
@@ -97,12 +97,92 @@
   }
   .support-link:hover{color:var(--accent);border-color:var(--accent);}
 
-  #app{max-width:1100px;margin:0 auto;padding:24px 16px 60px;}
+  #app{max-width:1100px;margin:0 auto;padding:24px 16px 60px;transition:max-width .2s;}
+  #app.wide{max-width:none;padding:24px 24px 60px;}
+
+  /* ---- 레이아웃: 왼쪽 상세 창 + 오른쪽 메인 ---- */
+  .main-layout{display:grid;grid-template-columns:280px minmax(0,1fr);gap:28px;align-items:start;}
+  .main-layout.open{grid-template-columns:360px minmax(0,1fr);}
+  .main-col{max-width:1100px;width:100%;margin:0 auto;}
+  .left-col{position:sticky;top:84px;display:flex;flex-direction:column;gap:14px;min-width:0;}
+  .main-layout.open .left-col{height:calc(100vh - 108px);}
+  .left-col .side-panel{position:static;height:auto;flex:1;min-height:0;}
+  /* 넓은 화면: 캘린더는 원래 자리(가운데) 그대로, 왼쪽 빈 여백에 오늘의 일정 */
+  @media (min-width:1580px){
+    .main-layout:not(.open){display:block;position:relative;}
+    .main-layout:not(.open) .main-col{max-width:1068px;}
+    .main-layout:not(.open) .left-col{position:absolute;left:0;top:0;width:clamp(200px, calc((100vw - 1068px) / 2 - 56px), 300px);}
+  }
+  @media (max-width:980px){
+    .main-layout, .main-layout.open{display:block;}
+    .left-col, .main-layout.open .left-col{position:static;height:auto;margin-bottom:18px;}
+    .left-col .side-panel{flex:none;max-height:75vh;}
+  }
+
+  /* ---- 오늘의 일정 ---- */
+  .today-head{display:flex;align-items:center;justify-content:space-between;margin-bottom:6px;}
+  .today-head .ttl{font-size:13px;font-weight:900;}
+  .today-head .ttl small{font-weight:600;color:var(--text-faint);margin-left:4px;font-size:11px;}
+  .today-toggle{width:28px;height:28px;border-radius:50%;border:1px solid var(--border);background:var(--surface);color:var(--text-dim);
+    display:flex;align-items:center;justify-content:center;cursor:pointer;transition:transform .2s, background .15s;padding:0;}
+  .today-toggle:hover{background:var(--accent-soft);color:var(--accent);}
+  .today-toggle.open{transform:rotate(90deg);background:var(--accent);color:#fff;border-color:var(--accent);}
+  .today-card{position:relative;background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:12px 14px;
+    box-shadow:var(--shadow);min-height:78px;cursor:pointer;text-align:left;width:100%;font-family:var(--font);color:var(--text);}
+  .today-card:hover{border-color:var(--accent);}
+  .today-card.empty{cursor:default;display:flex;align-items:center;justify-content:center;color:var(--text-faint);font-size:13px;font-weight:700;}
+  .today-card.empty:hover{border-color:var(--border);}
+  .today-card .tag{display:inline-block;color:#fff;font-size:10px;font-weight:800;padding:2px 8px;border-radius:999px;}
+  .today-card .artist{font-size:15px;font-weight:900;margin-top:5px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;padding-right:40px;}
+  .today-card .meta{font-size:11px;color:var(--text-faint);margin-top:2px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;padding-right:40px;}
+  .today-card .likes{position:absolute;top:12px;right:14px;font-size:11px;font-weight:800;color:var(--danger);}
+  .today-more{position:absolute;right:10px;bottom:9px;font-size:12px;font-weight:800;color:var(--accent);background:var(--accent-soft);
+    border-radius:999px;padding:2px 9px;border:none;cursor:pointer;font-family:var(--font);}
+
+  /* ---- 상세 창 ---- */
+  .side-panel{position:sticky;top:84px;height:calc(100vh - 108px);display:flex;flex-direction:column;background:var(--surface);
+    border:1px solid var(--border);border-radius:var(--radius);box-shadow:var(--shadow);overflow:hidden;}
+  @media (max-width:980px){ .side-panel{position:static;height:auto;max-height:75vh;margin-bottom:20px;} }
+  .side-head{padding:16px;border-bottom:1px solid var(--border);display:flex;flex-direction:column;gap:8px;}
+  .side-title{display:flex;align-items:center;justify-content:space-between;}
+  .side-title h3{margin:0;font-size:15px;font-weight:900;}
+  .side-close{width:28px;height:28px;border-radius:50%;border:none;background:var(--surface-2);color:var(--text-dim);cursor:pointer;font-size:13px;}
+  .side-input{width:100%;padding:9px 11px;border-radius:9px;border:1px solid var(--border);background:var(--surface-2);color:var(--text);font-size:13px;font-family:var(--font);}
+  .side-input:focus{outline:none;border-color:var(--accent);}
+  .side-period{display:grid;grid-template-columns:auto 1fr;gap:6px 8px;align-items:center;font-size:12px;color:var(--text-dim);font-weight:700;}
+  .side-period .date-group{gap:5px;}
+  .side-period .date-group input{padding:7px 4px;font-size:12px;border-radius:8px;}
+  .side-actions{display:flex;justify-content:space-between;align-items:center;}
+  .side-count{font-size:12px;color:var(--text-faint);font-weight:700;}
+  .side-reset{background:none;border:none;color:var(--accent);font-weight:700;font-size:12px;cursor:pointer;font-family:var(--font);padding:2px;}
+  .side-results{flex:1;overflow-y:auto;padding:14px 16px;display:flex;flex-direction:column;gap:10px;}
+  .s-card{border:1px solid var(--border);border-radius:14px;padding:14px;background:var(--surface-2);cursor:pointer;text-align:left;font-family:var(--font);color:var(--text);width:100%;}
+  .s-card:hover{border-color:var(--accent);}
+  .s-card .tag{display:inline-block;color:#fff;font-size:10px;font-weight:800;padding:2px 9px;border-radius:999px;margin-bottom:6px;}
+  .s-card .artist{font-size:15px;font-weight:900;}
+  .s-card .date{font-size:12px;color:var(--text-faint);margin-top:2px;line-height:1.5;}
+  .s-card .likes{margin-top:6px;font-size:12px;color:var(--danger);font-weight:700;}
+  .side-empty{text-align:center;color:var(--text-faint);font-size:13px;padding:30px 0;}
+
+  /* ---- 년/월 선택 ---- */
+  .ym-btn{font-size:22px;font-weight:900;min-width:140px;text-align:center;margin:0;background:none;border:none;color:var(--text);
+    font-family:var(--font);cursor:pointer;border-radius:10px;padding:2px 8px;}
+  .ym-btn:hover{background:var(--surface-2);}
+  .ym-btn .caret{font-size:12px;color:var(--text-faint);margin-left:4px;vertical-align:middle;}
+  .ym-picker{position:absolute;top:calc(100% + 8px);left:50%;transform:translateX(-50%);z-index:60;background:var(--surface);
+    border:1px solid var(--border);border-radius:14px;box-shadow:var(--shadow-lg);padding:14px;width:264px;}
+  .ym-year{display:flex;align-items:center;justify-content:space-between;margin-bottom:10px;font-weight:900;font-size:15px;}
+  .ym-year button{width:30px;height:30px;border-radius:50%;border:1px solid var(--border);background:var(--surface);cursor:pointer;color:var(--text);}
+  .ym-months{display:grid;grid-template-columns:repeat(4,1fr);gap:6px;}
+  .ym-months button{padding:9px 0;border-radius:8px;border:1px solid var(--border);background:var(--surface-2);font-weight:700;font-size:13px;
+    cursor:pointer;color:var(--text);font-family:var(--font);}
+  .ym-months button:hover{border-color:var(--accent);color:var(--accent);}
+  .ym-months button.cur{background:var(--accent);color:#fff;border-color:var(--accent);}
 
   footer{max-width:1100px;margin:0 auto;padding:10px 20px 40px;text-align:right;}
 
   /* ---- calendar header ---- */
-  .cal-header{display:flex;align-items:center;justify-content:center;gap:16px;margin-bottom:16px;}
+  .cal-header{display:flex;align-items:center;justify-content:center;gap:16px;margin-bottom:16px;position:relative;}
   .cal-header h2{font-size:22px;font-weight:900;min-width:140px;text-align:center;margin:0;}
   .cal-nav-btn{
     width:36px;height:36px;border-radius:50%;border:1px solid var(--border);
@@ -120,7 +200,7 @@
   .login-btn{padding:8px 16px;border-radius:999px;border:none;background:var(--accent);color:#fff;font-weight:700;font-size:13px;font-family:var(--font);cursor:pointer;}
   .login-btn:hover{opacity:.9;}
   .user-chip{display:flex;align-items:center;gap:8px;font-size:13px;font-weight:700;color:var(--text);}
-  .user-chip img{width:28px;height:28px;border-radius:50%;object-fit:cover;background:var(--surface-2);}
+  .user-chip .avatar{width:28px;height:28px;border-radius:50%;background:var(--accent);color:#fff;font-size:13px;font-weight:900;display:flex;align-items:center;justify-content:center;flex-shrink:0;}
   .user-chip .name{max-width:110px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
   .logout-btn{background:none;border:none;color:var(--text-faint);font-size:12px;cursor:pointer;font-family:var(--font);padding:4px;}
   .logout-btn:hover{color:var(--danger);}
@@ -351,6 +431,25 @@
     background:var(--accent-soft);color:var(--accent);border-radius:10px;padding:10px 14px;font-size:12px;font-weight:600;
     margin-bottom:18px;text-align:center;
   }
+  /* ---- 아티스트 여러 명 + 자동완성 ---- */
+  .artist-fields{display:flex;flex-direction:column;gap:12px;}
+  .artist-fields .field{margin-bottom:0;}
+  .ac-wrap{position:relative;}
+  .ac-wrap .artist-input{padding-right:40px;}
+  .artist-remove{position:absolute;right:8px;top:50%;transform:translateY(-50%);width:26px;height:26px;border-radius:50%;border:none;
+    background:var(--surface);color:var(--text-faint);cursor:pointer;font-size:12px;}
+  .artist-remove:hover{color:var(--danger);}
+  .artist-add{align-self:flex-start;background:none;border:1px dashed var(--border);border-radius:999px;padding:6px 14px;color:var(--accent);
+    font-weight:700;font-size:12px;cursor:pointer;font-family:var(--font);}
+  .artist-add:hover{border-color:var(--accent);background:var(--accent-soft);}
+  .ac-list{position:absolute;left:0;right:0;top:calc(100% + 4px);z-index:40;background:var(--surface);border:1px solid var(--border);
+    border-radius:10px;box-shadow:var(--shadow-lg);display:none;max-height:240px;overflow-y:auto;}
+  .ac-list.show{display:block;}
+  .ac-item{padding:9px 12px;cursor:pointer;display:flex;justify-content:space-between;align-items:center;gap:8px;font-size:14px;color:var(--text);}
+  .ac-item small{font-size:11px;color:var(--text-faint);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+  .ac-item.active,.ac-item:hover{background:var(--accent-soft);color:var(--accent);}
+  .form-card .artist-fields{margin-bottom:16px;}
+  .related-note{font-size:11px;color:var(--accent);font-weight:700;margin-top:2px;}
 </style>
 </head>
 <body>
@@ -359,7 +458,7 @@
   <div class="topbar-left">
     <span class="site-title">Sokury</span>
     <nav>
-      <a href="#/" data-route="/">메인</a>
+      <a href="#/" data-route="/">캘린더</a>
       <a href="#/apply" data-route="/apply">신청</a>
       <a href="#/my" data-route="/my" id="nav-my" style="display:none">내 신청</a>
       <a href="/manage" id="nav-manage" style="display:none">관리</a>
@@ -385,7 +484,7 @@ const CATEGORIES = {
   regular:     { label:'정규',      color:'var(--cat-regular)',     group:'top' },
   ep:          { label:'EP',        color:'var(--cat-ep)',          group:'top' },
   single:      { label:'싱글',      color:'var(--cat-single)',      group:'top' },
-  mixtape:     { label:'믹스테잎',  color:'var(--cat-mixtape)',     group:'top' },
+  mixtape:     { label:'믹스테입',  color:'var(--cat-mixtape)',     group:'top' },
   compilation: { label:'컴필레이션',color:'var(--cat-compilation)', group:'top' },
   concert:     { label:'콘서트',    color:'var(--cat-concert)',     group:'bottom' },
   physical:    { label:'피지컬',    color:'var(--cat-physical)',    group:'bottom' },
@@ -432,7 +531,7 @@ const LikedTracker = {
 // 캘린더/패널 렌더링은 이 캐시를 동기적으로 읽습니다. refreshSchedules()로 서버에서 다시 불러옵니다.
 let scheduleCache = [];
 async function refreshSchedules(){
-  try{ scheduleCache = await Api.listSchedules(); }
+  try{ [scheduleCache] = await Promise.all([Api.listSchedules(), loadArtistDb()]); }
   catch(e){ showToast('일정을 불러오지 못했습니다: ' + e.message); }
 }
 function getScheduleFromCache(id){ return scheduleCache.find(s=>s.id===id) || null; }
@@ -608,6 +707,7 @@ async function renderRoute(){
   const { path, params } = parseHash();
   renderNav(path);
   const app = document.getElementById('app');
+  app.classList.remove('wide');
   if(path.startsWith('/apply')){
     renderApplyPage(app);
     return;
@@ -644,6 +744,145 @@ function calVisible(s){
   return !calFilter.length || calFilter.includes(s.category);
 }
 function openCalDay(iso){ openDayListModal(iso, calDayItems[iso] || []); }
+
+/* ---- 년/월 선택 ---- */
+let ymYear = null;
+function toggleYmPicker(e){
+  e.stopPropagation();
+  const ex = document.getElementById('ym-picker');
+  if(ex){ ex.remove(); return; }
+  ymYear = calState.year; drawYmPicker();
+}
+function drawYmPicker(){
+  let el = document.getElementById('ym-picker');
+  if(!el){
+    el = document.createElement('div'); el.id = 'ym-picker'; el.className = 'ym-picker';
+    el.onclick = ev => ev.stopPropagation();
+    document.querySelector('.cal-header').appendChild(el);
+  }
+  el.innerHTML = `<div class="ym-year"><button type="button" onclick="ymYear--;drawYmPicker()">‹</button><span>${ymYear}년</span><button type="button" onclick="ymYear++;drawYmPicker()">›</button></div>
+    <div class="ym-months">${Array.from({length:12},(_,i)=>`<button type="button" class="${ymYear===calState.year&&i===calState.month?'cur':''}" onclick="pickYm(${ymYear},${i})">${i+1}월</button>`).join('')}</div>`;
+}
+function pickYm(y, m){ calState = {year:y, month:m}; renderMainPage(document.getElementById('app')); }
+document.addEventListener('click', ()=>{ const el = document.getElementById('ym-picker'); if(el) el.remove(); });
+
+/* ---- 오늘의 일정 + 상세 창 ---- */
+let sideOpen = false;
+const sideState = { q:'', cat:'all', from:['','',''], to:['','',''] };
+function todaySchedules(){
+  const t = todayISO();
+  return scheduleCache.filter(s=> s.startDate<=t && s.endDate>=t && (s.category!=='physical' || calShowPhysical))
+    .sort((a,b)=> (b.likes||0)-(a.likes||0));
+}
+function toggleSide(){ sideOpen = !sideOpen; renderMainPage(document.getElementById('app')); }
+function todayWidgetHtml(){
+  const list = todaySchedules();
+  const now = new Date();
+  const label = `${now.getMonth()+1}월 ${now.getDate()}일 (${'일월화수목금토'[now.getDay()]})`;
+  let body;
+  if(!list.length){
+    body = `<div class="today-card empty">없음</div>`;
+  } else {
+    const s = list[0], cat = CATEGORIES[s.category] || {label:s.category, color:'#888'};
+    body = `<div class="today-card" role="button" tabindex="0" onclick="openScheduleModal('${s.id}')">
+      <span class="tag" style="background:${cat.color}">${escapeHtml(cat.label)}</span>
+      <div class="artist">${escapeHtml(s.artist)}</div>
+      <div class="meta">${s.title?escapeHtml(s.title):fmtDateRangeKR(s.startDate, s.endDate)}${s.venue?' · '+escapeHtml(s.venue):''}</div>
+      <span class="likes">❤️ ${s.likes||0}</span>
+      ${list.length>1 ? `<button type="button" class="today-more" onclick="event.stopPropagation(); if(!sideOpen) toggleSide();">+${list.length-1}</button>` : ''}
+    </div>`;
+  }
+  return `<div class="today-widget">
+    <div class="today-head">
+      <span class="ttl">오늘의 일정<small>${label}</small></span>
+      <button type="button" class="today-toggle ${sideOpen?'open':''}" onclick="toggleSide()" title="${sideOpen?'상세 창 닫기':'오늘 일정 자세히 보기 · 검색'}" aria-expanded="${sideOpen}">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg>
+      </button>
+    </div>
+    ${body}
+  </div>`;
+}
+function sideDateHtml(prefix, arr){
+  return `<div class="date-group">
+    <input class="y" type="text" inputmode="numeric" maxlength="4" placeholder="YYYY" id="${prefix}-y" value="${arr[0]}" autocomplete="off">
+    <input class="m" type="text" inputmode="numeric" maxlength="2" placeholder="MM" id="${prefix}-m" value="${arr[1]}" autocomplete="off">
+    <input class="d" type="text" inputmode="numeric" maxlength="2" placeholder="DD" id="${prefix}-d" value="${arr[2]}" autocomplete="off">
+  </div>`;
+}
+function sidePanelHtml(){
+  return `<aside class="side-panel">
+    <div class="side-head">
+      <div class="side-title"><h3>일정 찾기</h3><button type="button" class="side-close" onclick="toggleSide()" title="닫기">✕</button></div>
+      <input id="side-q" class="side-input" type="search" placeholder="아티스트·그룹 검색" value="${escapeHtml(sideState.q)}" autocomplete="off">
+      <select id="side-cat" class="side-input">
+        ${['all',...ALL_CATS].map(k=>`<option value="${k}" ${sideState.cat===k?'selected':''}>${k==='all'?'전체 카테고리':CATEGORIES[k].label}</option>`).join('')}
+      </select>
+      <div class="side-period">
+        <span>시작</span>${sideDateHtml('sf', sideState.from)}
+        <span>종료</span>${sideDateHtml('st', sideState.to)}
+      </div>
+      <div class="side-actions"><span class="side-count" id="side-count"></span><button type="button" class="side-reset" onclick="resetSide()">초기화</button></div>
+    </div>
+    <div class="side-results" id="side-results"></div>
+  </aside>`;
+}
+function bindSidePanel(){
+  const q = document.getElementById('side-q');
+  if(!q) return;
+  q.oninput = ()=>{ sideState.q = q.value; renderSideResults(); };
+  document.getElementById('side-cat').onchange = (e)=>{ sideState.cat = e.target.value; renderSideResults(); };
+  [['sf','from'],['st','to']].forEach(([px,key])=>{
+    [['y',4,null],['m',2,12],['d',2,31]].forEach(([part,len,max],i)=>{
+      const el = document.getElementById(`${px}-${part}`);
+      clampDigits(el, len, max);
+      el.addEventListener('input', ()=>{ sideState[key][i] = el.value; renderSideResults(); });
+    });
+  });
+  renderSideResults();
+}
+function resetSide(){
+  sideState.q=''; sideState.cat='all'; sideState.from=['','','']; sideState.to=['','',''];
+  renderMainPage(document.getElementById('app'));
+}
+function sideDate(arr){
+  const [y,m,d] = arr;
+  if(y.length!==4 || !m || !d) return null;
+  return `${y}-${String(Math.min(12,Math.max(1,+m))).padStart(2,'0')}-${String(Math.min(31,Math.max(1,+d))).padStart(2,'0')}`;
+}
+function renderSideResults(){
+  const box = document.getElementById('side-results'), cnt = document.getElementById('side-count');
+  if(!box) return;
+  const q = sideState.q.trim().toLowerCase(), from = sideDate(sideState.from), to = sideDate(sideState.to);
+  const searching = q || sideState.cat!=='all' || from || to;
+  let list;
+  if(!searching){
+    list = todaySchedules();
+    cnt.textContent = `오늘의 일정 ${list.length}건`;
+  } else {
+    // 그룹·레이블 이름이 검색어와 맞으면 소속 아티스트를 모두 포함
+    const hitGroups = q ? knownGroups.filter(g=>g.name.toLowerCase().includes(q)) : [];
+    const related = new Set(knownArtists.filter(a=>(a.groups||[]).some(id=>hitGroups.some(g=>g.id===id))).map(a=>a.name));
+    list = scheduleCache.filter(s=>
+      (!q || (s.artists||[s.artist]).some(n=>related.has(n) || String(n).toLowerCase().includes(q)) || String(s.title||'').toLowerCase().includes(q)) &&
+      (sideState.cat==='all' || s.category===sideState.cat) &&
+      (!from || s.endDate >= from) && (!to || s.startDate <= to)
+    ).sort((a,b)=> a.startDate.localeCompare(b.startDate) || (b.likes||0)-(a.likes||0));
+    cnt.innerHTML = `검색 결과 ${list.length}건` + (hitGroups.length ? `<div class="related-note">${hitGroups.map(g=>escapeHtml(g.name)).join(', ')} 소속 ${related.size}명 포함</div>` : '');
+  }
+  if(!list.length){
+    box.innerHTML = `<div class="side-empty">${searching?'조건에 맞는 일정이 없어요.':'오늘은 일정이 없어요.'}</div>`;
+    return;
+  }
+  box.innerHTML = list.map(s=>{
+    const cat = CATEGORIES[s.category] || {label:s.category, color:'#888'};
+    return `<button type="button" class="s-card" onclick="openScheduleModal('${s.id}')">
+      <span class="tag" style="background:${cat.color}">${escapeHtml(cat.label)}</span>
+      <div class="artist">${escapeHtml(s.artist)}</div>
+      <div class="date">${fmtDateRangeKR(s.startDate, s.endDate)}${s.title?' · '+escapeHtml(s.title):''}${s.venue?' · '+escapeHtml(s.venue):''}</div>
+      <div class="likes">❤️ ${s.likes||0}</div>
+    </button>`;
+  }).join('');
+}
 function toggleCalFilter(cat){
   const i = calFilter.indexOf(cat);
   if(i > -1) calFilter.splice(i, 1); else calFilter.push(cat);
@@ -751,12 +990,21 @@ function renderMainPage(app){
     weeksHtml += `<div class="cal-week" style="grid-template-rows:${rows}">${html}</div>`;
   }
 
+  app.classList.add('wide');
   app.innerHTML = `
-    <div class="cal-header">
-      <button class="cal-nav-btn" onclick="shiftMonth(-1)">‹</button>
-      <h2>${calState.year}년 ${calState.month+1}월</h2>
-      <button class="cal-nav-btn" onclick="shiftMonth(1)">›</button>
-      <button class="cal-today-btn" onclick="goToday()">오늘</button>
+   <div class="main-layout ${sideOpen?'open':''}">
+    <div class="left-col">
+      ${todayWidgetHtml()}
+      ${sideOpen ? sidePanelHtml() : ''}
+    </div>
+    <div class="main-col">
+    <div class="main-top">
+      <div class="cal-header">
+        <button class="cal-nav-btn" onclick="shiftMonth(-1)">‹</button>
+        <button type="button" class="ym-btn" onclick="toggleYmPicker(event)" title="년·월 선택">${calState.year}년 ${calState.month+1}월<span class="caret">▾</span></button>
+        <button class="cal-nav-btn" onclick="shiftMonth(1)">›</button>
+        <button class="cal-today-btn" onclick="goToday()">오늘</button>
+      </div>
     </div>
     <div class="legend ${calFilter.length?'filtering':''}">${legendHtml}${calFilter.length?'<button type="button" class="legend-reset" onclick="resetCalFilter()">전체 보기</button>':''}</div>
     <div class="cal-wrap">
@@ -786,10 +1034,13 @@ function renderMainPage(app){
         <ul class="panel-list" id="panel-right"></ul>
       </div>
     </div>
+    </div>
+   </div>
   `;
 
   renderPanel('panel-left', getTopLikedList());
   renderPanel('panel-right', getUpcomingList());
+  if(sideOpen) bindSidePanel();
 }
 
 function getTopLikedList(){
@@ -872,7 +1123,7 @@ function renderApplyPage(app){
           </div>
           <div class="date-group-label"><span>년</span><span>월</span><span>일</span></div>
         </div>
-        <div class="field"><label>아티스트</label><input type="text" name="artist" required></div>
+        ${artistFieldsHtml('apply', [])}
         <div class="field"><label>카테고리</label>
           <select name="category" id="apply-category" required>
             ${ALL_CATS.map(k=>`<option value="${k}">${CATEGORIES[k].label}</option>`).join('')}
@@ -887,6 +1138,7 @@ function renderApplyPage(app){
   `;
   setupDateRangeInputs();
   bindVenueToggle('apply-category', 'apply-venue-wrap');
+  if(!knownArtists.length) loadArtistDb();
   document.getElementById('apply-form').addEventListener('submit', async function(e){
     e.preventDefault();
     const fd = new FormData(e.target);
@@ -895,9 +1147,11 @@ function renderApplyPage(app){
     if(!startDate){ showToast('시작일을 올바르게 입력해주세요.'); return; }
     if(!endDate){ showToast('종료일을 올바르게 입력해주세요.'); return; }
     if(endDate < startDate){ showToast('종료일이 시작일보다 빠를 수 없습니다.'); return; }
+    const artists = readArtistFields('apply');
+    if(!artists.length){ showToast('아티스트를 1명 이상 입력해주세요.'); return; }
     const application = {
       startDate, endDate,
-      artist: fd.get('artist').trim(),
+      artists,
       category: fd.get('category'),
       name: fd.get('name').trim(),
       venue: fd.get('category')==='concert' ? (fd.get('venue')||'').trim() : '',
@@ -911,6 +1165,7 @@ function renderApplyPage(app){
       e.target.reset();
       setupDateRangeInputs();
       bindVenueToggle('apply-category', 'apply-venue-wrap');
+      document.getElementById('apply-artists').outerHTML = artistFieldsHtml('apply', []);
     }catch(err){
       showToast('신청 접수에 실패했습니다: ' + err.message);
     }finally{
@@ -940,7 +1195,7 @@ function renderAuthArea(){
   const area = document.getElementById('auth-area');
   if(!area) return;
   if(currentUser){
-    const pic = currentUser.picture ? `<img src="${escapeHtml(currentUser.picture)}" alt="" referrerpolicy="no-referrer">` : '';
+    const pic = `<span class="avatar">${escapeHtml(Array.from(currentUser.name||currentUser.email||'?')[0].toUpperCase())}</span>`;
     area.innerHTML = `<div class="user-chip">${pic}<span class="name">${escapeHtml(currentUser.name||currentUser.email)}</span>
       <button class="logout-btn" onclick="logout()">로그아웃</button></div>`;
   } else {
@@ -1036,6 +1291,109 @@ async function renderMyPage(app){
     ${list.length ? `<ul class="my-list">${rows}</ul>` : `<a href="#/apply" class="submit-btn" style="display:block;text-align:center;text-decoration:none">일정 신청하러 가기</a>`}
   </div>`;
 }
+
+/* =========================================================
+   아티스트 여러 명 입력 + 자동완성
+========================================================= */
+let knownArtists = [];   // [{ name, groups:[groupId] }]
+let knownGroups = [];    // [{ id, name, kind }]
+async function loadArtistDb(){
+  try{ const d = await apiCall('resource=artists'); knownArtists = d.artists || []; knownGroups = d.groups || []; }catch(e){}
+}
+function groupNamesOf(name){
+  const a = knownArtists.find(x=>x.name===name);
+  return a ? (a.groups||[]).map(id=>(knownGroups.find(g=>g.id===id)||{}).name).filter(Boolean) : [];
+}
+function artistRowHtml(i, val){
+  return `<div class="field artist-row"><label>아티스트 ${i+1}</label>
+    <div class="ac-wrap"><input type="text" class="artist-input" value="${escapeHtml(val||'')}" autocomplete="off" spellcheck="false">
+      ${i>0 ? `<button type="button" class="artist-remove" title="빼기" onclick="removeArtistRow(this)">✕</button>` : ''}
+      <div class="ac-list"></div></div></div>`;
+}
+function artistFieldsHtml(prefix, names){
+  const list = names && names.length ? names : [''];
+  return `<div class="artist-fields" id="${prefix}-artists">
+    ${list.map((n,i)=>artistRowHtml(i, n)).join('')}
+    <button type="button" class="artist-add" onclick="addArtistRow('${prefix}')">+ 아티스트 추가</button>
+  </div>`;
+}
+function relabelArtistRows(box){
+  box.querySelectorAll('.artist-row').forEach((row,i)=>{ row.querySelector('label').textContent = `아티스트 ${i+1}`; });
+}
+function addArtistRow(prefix){
+  const box = document.getElementById(prefix+'-artists');
+  const n = box.querySelectorAll('.artist-row').length;
+  box.querySelector('.artist-add').insertAdjacentHTML('beforebegin', artistRowHtml(n, ''));
+  const rows = box.querySelectorAll('.artist-row');
+  rows[rows.length-1].querySelector('input').focus();
+}
+function removeArtistRow(btn){
+  const box = btn.closest('.artist-fields');
+  btn.closest('.artist-row').remove();
+  relabelArtistRows(box);
+}
+function readArtistFields(prefix){
+  const out = [];
+  document.querySelectorAll(`#${prefix}-artists .artist-input`).forEach(el=>{
+    const v = el.value.replace(/\s+/g,' ').trim();
+    if(v && !out.includes(v)) out.push(v);
+  });
+  return out;
+}
+// 자동완성: 입력하는 글자가 들어간 기존 아티스트를 바로 아래에 보여줌
+function acSuggest(input){
+  const list = input.parentElement.querySelector('.ac-list');
+  const q = input.value.trim().toLowerCase();
+  if(!q){ list.classList.remove('show'); list.innerHTML=''; return; }
+  const box = input.closest('.artist-fields');
+  const taken = box ? Array.from(box.querySelectorAll('.artist-input')).filter(x=>x!==input).map(x=>x.value.trim()) : [];
+  const hits = knownArtists.map(a=>a.name)
+    .filter(n=> n.toLowerCase().includes(q) && !taken.includes(n))
+    .sort((a,b)=> (b.toLowerCase().startsWith(q)) - (a.toLowerCase().startsWith(q)) || a.localeCompare(b,'ko'))
+    .slice(0, 8);
+  if(!hits.length || (hits.length===1 && hits[0]===input.value.trim())){ list.classList.remove('show'); list.innerHTML=''; return; }
+  list.innerHTML = hits.map((n,i)=>{
+    const g = groupNamesOf(n);
+    return `<div class="ac-item ${i===0?'active':''}" data-name="${escapeHtml(n)}"><span>${escapeHtml(n)}</span>${g.length?`<small>${escapeHtml(g.join(', '))}</small>`:''}</div>`;
+  }).join('');
+  list.classList.add('show');
+}
+function acPick(input, name){
+  input.value = name;
+  const list = input.parentElement.querySelector('.ac-list');
+  list.classList.remove('show'); list.innerHTML='';
+}
+document.addEventListener('input', e=>{ if(e.target.classList && e.target.classList.contains('artist-input')) acSuggest(e.target); });
+document.addEventListener('focusin', e=>{ if(e.target.classList && e.target.classList.contains('artist-input')) acSuggest(e.target); });
+document.addEventListener('focusout', e=>{
+  if(e.target.classList && e.target.classList.contains('artist-input')){
+    const list = e.target.parentElement.querySelector('.ac-list');
+    setTimeout(()=>{ list.classList.remove('show'); }, 150);
+  }
+});
+document.addEventListener('mousedown', e=>{
+  const item = e.target.closest && e.target.closest('.ac-item');
+  if(!item) return;
+  e.preventDefault();
+  acPick(item.closest('.ac-wrap').querySelector('.artist-input'), item.getAttribute('data-name'));
+});
+document.addEventListener('keydown', e=>{
+  if(!(e.target.classList && e.target.classList.contains('artist-input'))) return;
+  const list = e.target.parentElement.querySelector('.ac-list');
+  if(!list.classList.contains('show')) return;
+  const items = Array.from(list.querySelectorAll('.ac-item'));
+  let i = items.findIndex(x=>x.classList.contains('active'));
+  if(e.key==='ArrowDown' || e.key==='ArrowUp'){
+    e.preventDefault();
+    if(i>-1) items[i].classList.remove('active');
+    i = e.key==='ArrowDown' ? (i+1)%items.length : (i-1+items.length)%items.length;
+    items[i].classList.add('active');
+  } else if(e.key==='Enter' && i>-1){
+    e.preventDefault(); acPick(e.target, items[i].getAttribute('data-name'));
+  } else if(e.key==='Escape'){
+    list.classList.remove('show');
+  }
+});
 
 /* ---- 콘서트 선택 시에만 공연장 칸 표시 ---- */
 function bindVenueToggle(selectId, wrapId){
