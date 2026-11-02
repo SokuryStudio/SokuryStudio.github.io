@@ -326,7 +326,7 @@ async function writeArtistDb(db) { await redis(['SET', ARTISTDB_KEY, JSON.string
 async function ensureRegistry(names) {
   const db = await readArtistDb();
   let changed = false;
-  for (const n of names) if (!db.artists.some((a) => a.name === n)) { db.artists.push({ name: n, groups: [] }); changed = true; }
+  for (const n of names) if (!db.groups.some((g) => g.name === n) && !db.artists.some((a) => a.name === n)) { db.artists.push({ name: n, groups: [] }); changed = true; }
   if (changed) await writeArtistDb(db);
 }
 const cleanName = (v) => String(v || '').replace(/\s+/g, ' ').trim().slice(0, 80);
@@ -356,7 +356,9 @@ async function handleArtists(req, res, action) {
   if (req.method === 'GET') {
     // 등록부에 없지만 일정에 쓰인 이름도 함께 보여줌
     const schedules = await readList('schedules');
-    for (const s of schedules) for (const n of s.artists) if (!db.artists.some((a) => a.name === n)) db.artists.push({ name: n, groups: [] });
+    const isGroup = (n) => db.groups.some((g) => g.name === n);
+    db.artists = db.artists.filter((a) => !isGroup(a.name));
+    for (const s of schedules) for (const n of s.artists) if (!isGroup(n) && !db.artists.some((a) => a.name === n)) db.artists.push({ name: n, groups: [] });
     db.artists.sort((a, b) => a.name.localeCompare(b.name, 'ko'));
     return res.status(200).json(db);
   }
@@ -367,6 +369,7 @@ async function handleArtists(req, res, action) {
     const name = cleanName(b.name);
     if (!name) return res.status(400).json({ error: '이름을 입력해주세요.' });
     if (db.artists.some((a) => a.name === name)) return res.status(409).json({ error: '이미 있는 아티스트예요.' });
+    if (db.groups.some((g) => g.name === name)) return res.status(409).json({ error: '같은 이름의 그룹이 있어요.' });
     db.artists.push({ name, groups: [] });
     await writeArtistDb(db);
     return res.status(201).json({ name });
@@ -376,6 +379,7 @@ async function handleArtists(req, res, action) {
     const from = cleanName(b.from), to = cleanName(b.to);
     if (!from || !to) return res.status(400).json({ error: '이름을 입력해주세요.' });
     if (from === to) return res.status(400).json({ error: '같은 이름이에요.' });
+    if (db.groups.some((g) => g.name === to)) return res.status(409).json({ error: '같은 이름의 그룹이 있어요.' });
     const src = db.artists.find((a) => a.name === from) || { name: from, groups: [] };
     const dst = db.artists.find((a) => a.name === to);
     if (dst) { // 이미 있는 이름이면 하나로 합침
@@ -404,6 +408,17 @@ async function handleArtists(req, res, action) {
     return res.status(200).json({ deleted: name, schedulesUpdated: n });
   }
 
+  if (action === 'togroup') {
+    const name = cleanName(b.name);
+    if (!name) return res.status(400).json({ error: '이름이 없습니다.' });
+    if (db.groups.some((g) => g.name === name)) return res.status(409).json({ error: '이미 같은 이름의 그룹이 있어요.' });
+    const g = { id: uid('g'), name, kind: GROUP_KINDS.includes(b.kind) ? b.kind : '그룹' };
+    db.groups.push(g);
+    db.artists = db.artists.filter((a) => a.name !== name); // 일정에 적힌 이름은 그대로 (이제 그룹 이름으로 쓰임)
+    await writeArtistDb(db);
+    return res.status(200).json(g);
+  }
+
   if (action === 'setgroups') {
     const name = cleanName(b.name);
     if (!name) return res.status(400).json({ error: '이름이 없습니다.' });
@@ -426,6 +441,7 @@ async function handleGroups(req, res, id, action) {
     const name = cleanName(b.name);
     if (!name) return res.status(400).json({ error: '그룹 이름을 입력해주세요.' });
     if (db.groups.some((g) => g.name === name)) return res.status(409).json({ error: '이미 있는 그룹이에요.' });
+    if (db.artists.some((a) => a.name === name)) return res.status(409).json({ error: `'${name}'은(는) 이미 아티스트로 있어요. 이름 관리에서 '그룹으로 전환'을 눌러주세요.` });
     const g = { id: uid('g'), name, kind: GROUP_KINDS.includes(b.kind) ? b.kind : '그룹' };
     db.groups.push(g);
     await writeArtistDb(db);
@@ -438,13 +454,23 @@ async function handleGroups(req, res, id, action) {
     const name = b.name !== undefined ? cleanName(b.name) : g.name;
     if (!name) return res.status(400).json({ error: '그룹 이름을 입력해주세요.' });
     if (db.groups.some((x) => x.id !== id && x.name === name)) return res.status(409).json({ error: '이미 있는 그룹 이름이에요.' });
+    if (name !== g.name && db.artists.some((a) => a.name === name)) return res.status(409).json({ error: '같은 이름의 아티스트가 있어요.' });
+    const from = g.name;
     g.name = name;
     if (GROUP_KINDS.includes(b.kind)) g.kind = b.kind;
     await writeArtistDb(db);
+    if (from !== name) await rewriteArtistEverywhere((arr) => arr.map((x) => (x === from ? name : x)));
     return res.status(200).json(g);
   }
+  if (req.method === 'POST' && action === 'toartist') {
+    db.groups = db.groups.filter((x) => x.id !== id);
+    for (const a of db.artists) a.groups = (a.groups || []).filter((x) => x !== id);
+    if (!db.artists.some((a) => a.name === g.name)) db.artists.push({ name: g.name, groups: [] });
+    await writeArtistDb(db);
+    return res.status(200).json({ name: g.name });
+  }
   if (req.method === 'POST' && action === 'members') {
-    const members = (Array.isArray(b.members) ? b.members : []).map(cleanName).filter(Boolean);
+    const members = (Array.isArray(b.members) ? b.members : []).map(cleanName).filter((n) => n && !db.groups.some((x) => x.name === n));
     for (const n of members) if (!db.artists.some((a) => a.name === n)) db.artists.push({ name: n, groups: [] });
     for (const a of db.artists) {
       const set = new Set(a.groups || []);
