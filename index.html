@@ -448,7 +448,9 @@
   .ac-item{padding:9px 12px;cursor:pointer;display:flex;justify-content:space-between;align-items:center;gap:8px;font-size:14px;color:var(--text);}
   .ac-item small{font-size:11px;color:var(--text-faint);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
   .ac-item.active,.ac-item:hover{background:var(--accent-soft);color:var(--accent);}
+  .ac-kind{font-style:normal;font-size:10px;font-weight:800;color:#fff;background:var(--accent);border-radius:999px;padding:1px 7px;}
   .form-card .artist-fields{margin-bottom:16px;}
+  .note-text{white-space:pre-wrap;word-break:break-word;}
   .related-note{font-size:11px;color:var(--accent);font-weight:700;margin-top:2px;}
 </style>
 </head>
@@ -615,7 +617,7 @@ function openScheduleModal(id){
       <div class="modal-row"><span class="modal-label">아티스트</span><span class="modal-value">${escapeHtml(s.artist)}</span></div>
       <div class="modal-row"><span class="modal-label">항목</span><span class="modal-value">${s.title?escapeHtml(s.title):'-'}</span></div>
       ${s.venue?`<div class="modal-row"><span class="modal-label">공연장</span><span class="modal-value">${escapeHtml(s.venue)}</span></div>`:''}
-      ${s.note?`<div class="modal-row"><span class="modal-label">비고</span><span class="modal-value small">${escapeHtml(s.note)}</span></div>`:''}
+      ${s.note?`<div class="modal-row"><span class="modal-label">비고</span><span class="modal-value small note-text">${escapeHtml(s.note)}</span></div>`:''}
     </div>
     <div class="modal-actions">
       <button class="action-btn ${liked?'liked':''}" id="like-btn" onclick="handleLike('${id}')">${liked?'❤️':'🤍'} <span id="like-count">${s.likes||0}</span></button>
@@ -815,7 +817,7 @@ function sidePanelHtml(){
       <div class="side-title"><h3>일정 찾기</h3><button type="button" class="side-close" onclick="toggleSide()" title="닫기">✕</button></div>
       <input id="side-q" class="side-input" type="search" placeholder="아티스트·그룹 검색" value="${escapeHtml(sideState.q)}" autocomplete="off">
       <select id="side-cat" class="side-input">
-        ${['all',...ALL_CATS].map(k=>`<option value="${k}" ${sideState.cat===k?'selected':''}>${k==='all'?'전체 카테고리':CATEGORIES[k].label}</option>`).join('')}
+        ${['all',...ALL_CATS].map(k=>`<option value="${k}" ${sideState.cat===k?'selected':''}>${k==='all'?'전체':CATEGORIES[k].label}</option>`).join('')}
       </select>
       <div class="side-period">
         <span>시작</span>${sideDateHtml('sf', sideState.from)}
@@ -862,12 +864,16 @@ function renderSideResults(){
     // 그룹·레이블 이름이 검색어와 맞으면 소속 아티스트를 모두 포함
     const hitGroups = q ? knownGroups.filter(g=>g.name.toLowerCase().includes(q)) : [];
     const related = new Set(knownArtists.filter(a=>(a.groups||[]).some(id=>hitGroups.some(g=>g.id===id))).map(a=>a.name));
+    hitGroups.forEach(g=>related.add(g.name));
+    const myGroups = q ? knownArtists.filter(a=>a.name.toLowerCase().includes(q)).flatMap(a=>(a.groups||[]).map(id=>(knownGroups.find(g=>g.id===id)||{}).name)).filter(Boolean) : [];
+    myGroups.forEach(n=>related.add(n));
     list = scheduleCache.filter(s=>
       (!q || (s.artists||[s.artist]).some(n=>related.has(n) || String(n).toLowerCase().includes(q)) || String(s.title||'').toLowerCase().includes(q)) &&
       (sideState.cat==='all' || s.category===sideState.cat) &&
       (!from || s.endDate >= from) && (!to || s.startDate <= to)
     ).sort((a,b)=> a.startDate.localeCompare(b.startDate) || (b.likes||0)-(a.likes||0));
-    cnt.innerHTML = `검색 결과 ${list.length}건` + (hitGroups.length ? `<div class="related-note">${hitGroups.map(g=>escapeHtml(g.name)).join(', ')} 소속 ${related.size}명 포함</div>` : '');
+    cnt.innerHTML = `검색 결과 ${list.length}건` + (hitGroups.length ? `<div class="related-note">${hitGroups.map(g=>escapeHtml(g.name)).join(', ')} 소속 아티스트 포함</div>` : '')
+      + (myGroups.length ? `<div class="related-note">소속 그룹(${Array.from(new Set(myGroups)).map(escapeHtml).join(', ')}) 일정 포함</div>` : '');
   }
   if(!list.length){
     box.innerHTML = `<div class="side-empty">${searching?'조건에 맞는 일정이 없어요.':'오늘은 일정이 없어요.'}</div>`;
@@ -1310,9 +1316,9 @@ function artistRowHtml(i, val){
       ${i>0 ? `<button type="button" class="artist-remove" title="빼기" onclick="removeArtistRow(this)">✕</button>` : ''}
       <div class="ac-list"></div></div></div>`;
 }
-function artistFieldsHtml(prefix, names){
+function artistFieldsHtml(prefix, names, opts){
   const list = names && names.length ? names : [''];
-  return `<div class="artist-fields" id="${prefix}-artists">
+  return `<div class="artist-fields" id="${prefix}-artists" ${opts && opts.noGroups ? 'data-no-groups="1"' : ''}>
     ${list.map((n,i)=>artistRowHtml(i, n)).join('')}
     <button type="button" class="artist-add" onclick="addArtistRow('${prefix}')">+ 아티스트 추가</button>
   </div>`;
@@ -1347,15 +1353,17 @@ function acSuggest(input){
   if(!q){ list.classList.remove('show'); list.innerHTML=''; return; }
   const box = input.closest('.artist-fields');
   const taken = box ? Array.from(box.querySelectorAll('.artist-input')).filter(x=>x!==input).map(x=>x.value.trim()) : [];
-  const hits = knownArtists.map(a=>a.name)
-    .filter(n=> n.toLowerCase().includes(q) && !taken.includes(n))
-    .sort((a,b)=> (b.toLowerCase().startsWith(q)) - (a.toLowerCase().startsWith(q)) || a.localeCompare(b,'ko'))
+  // 아티스트 + (멤버 입력칸이 아니면) 그룹·레이블 이름도 후보로
+  const pool = knownArtists.map(a=>({ name:a.name, sub:groupNamesOf(a.name).join(', '), group:false }));
+  if(!(box && box.dataset.noGroups)) knownGroups.forEach(g=>{ if(!pool.some(x=>x.name===g.name)) pool.push({ name:g.name, sub:g.kind, group:true }); });
+  const hits = pool
+    .filter(x=> x.name.toLowerCase().includes(q) && !taken.includes(x.name))
+    .sort((a,b)=> (b.name.toLowerCase().startsWith(q)) - (a.name.toLowerCase().startsWith(q)) || a.name.localeCompare(b.name,'ko'))
     .slice(0, 8);
-  if(!hits.length || (hits.length===1 && hits[0]===input.value.trim())){ list.classList.remove('show'); list.innerHTML=''; return; }
-  list.innerHTML = hits.map((n,i)=>{
-    const g = groupNamesOf(n);
-    return `<div class="ac-item ${i===0?'active':''}" data-name="${escapeHtml(n)}"><span>${escapeHtml(n)}</span>${g.length?`<small>${escapeHtml(g.join(', '))}</small>`:''}</div>`;
-  }).join('');
+  if(!hits.length || (hits.length===1 && hits[0].name===input.value.trim())){ list.classList.remove('show'); list.innerHTML=''; return; }
+  list.innerHTML = hits.map((x,i)=>
+    `<div class="ac-item ${i===0?'active':''}" data-name="${escapeHtml(x.name)}"><span>${escapeHtml(x.name)}</span>${x.group?`<em class="ac-kind">${escapeHtml(x.sub)}</em>`:(x.sub?`<small>${escapeHtml(x.sub)}</small>`:'')}</div>`
+  ).join('');
   list.classList.add('show');
 }
 function acPick(input, name){

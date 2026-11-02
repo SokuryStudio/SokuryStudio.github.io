@@ -159,6 +159,7 @@
   .ac-item{padding:9px 12px;cursor:pointer;display:flex;justify-content:space-between;align-items:center;gap:8px;font-size:14px;color:var(--text);}
   .ac-item small{font-size:11px;color:var(--text-faint);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
   .ac-item.active,.ac-item:hover{background:var(--accent-soft);color:var(--accent);}
+  .ac-kind{font-style:normal;font-size:10px;font-weight:800;color:#fff;background:var(--accent);border-radius:999px;padding:1px 7px;}
   /* ---- 엑셀식 열 필터 ---- */
   .th-filter{background:none;border:none;padding:0;font:inherit;color:inherit;cursor:pointer;display:inline-flex;align-items:center;gap:4px;font-weight:800;}
   .th-filter:hover{color:var(--accent);}
@@ -196,6 +197,10 @@
   /* ---- 이름 관리 ---- */
   .group-bar{display:flex;align-items:center;gap:6px;flex-wrap:wrap;flex:1;min-width:0;}
   .group-bar-label{font-size:12px;font-weight:800;color:var(--text-faint);margin-right:4px;}
+  .kind-badge{display:inline-block;font-size:10px;font-weight:800;border-radius:999px;padding:2px 8px;background:var(--surface-2);color:var(--text-dim);border:1px solid var(--border);}
+  .kind-badge.grp{background:var(--accent);color:#fff;border-color:var(--accent);}
+  .member-list{font-size:12px;color:var(--text-dim);}
+  .note-text{white-space:pre-wrap;word-break:break-word;}
   .grp-chip{display:inline-block;font-size:11px;font-weight:700;color:var(--accent);background:var(--accent-soft);border-radius:999px;padding:2px 9px;cursor:pointer;border:none;font-family:var(--font);margin:1px 0;}
   .grp-chip.big{font-size:12px;padding:5px 12px;}
   .grp-chip small{font-weight:600;opacity:.75;font-size:10px;}
@@ -525,7 +530,7 @@ function openApplicationModal(id){
       <div class="modal-row"><span class="modal-label">일정</span><span class="modal-value">${escapeHtml(a.name)}</span></div>
       ${a.venue?`<div class="modal-row"><span class="modal-label">공연장</span><span class="modal-value">${escapeHtml(a.venue)}</span></div>`:''}
       <div class="modal-row"><span class="modal-label">신청 계정</span><span class="modal-value small">${a.ownerEmail?escapeHtml(a.ownerEmail):'로그인 없이 신청'}</span></div>
-      ${a.note?`<div class="modal-row"><span class="modal-label">비고</span><span class="modal-value small">${escapeHtml(a.note)}</span></div>`:''}
+      ${a.note?`<div class="modal-row"><span class="modal-label">비고</span><span class="modal-value small note-text">${escapeHtml(a.note)}</span></div>`:''}
     </div>
     <div class="modal-form-actions">
       ${a.status==='pending' ? `
@@ -654,9 +659,9 @@ function artistRowHtml(i, val){
       ${i>0 ? `<button type="button" class="artist-remove" title="빼기" onclick="removeArtistRow(this)">✕</button>` : ''}
       <div class="ac-list"></div></div></div>`;
 }
-function artistFieldsHtml(prefix, names){
+function artistFieldsHtml(prefix, names, opts){
   const list = names && names.length ? names : [''];
-  return `<div class="artist-fields" id="${prefix}-artists">
+  return `<div class="artist-fields" id="${prefix}-artists" ${opts && opts.noGroups ? 'data-no-groups="1"' : ''}>
     ${list.map((n,i)=>artistRowHtml(i, n)).join('')}
     <button type="button" class="artist-add" onclick="addArtistRow('${prefix}')">+ 아티스트 추가</button>
   </div>`;
@@ -691,15 +696,17 @@ function acSuggest(input){
   if(!q){ list.classList.remove('show'); list.innerHTML=''; return; }
   const box = input.closest('.artist-fields');
   const taken = box ? Array.from(box.querySelectorAll('.artist-input')).filter(x=>x!==input).map(x=>x.value.trim()) : [];
-  const hits = knownArtists.map(a=>a.name)
-    .filter(n=> n.toLowerCase().includes(q) && !taken.includes(n))
-    .sort((a,b)=> (b.toLowerCase().startsWith(q)) - (a.toLowerCase().startsWith(q)) || a.localeCompare(b,'ko'))
+  // 아티스트 + (멤버 입력칸이 아니면) 그룹·레이블 이름도 후보로
+  const pool = knownArtists.map(a=>({ name:a.name, sub:groupNamesOf(a.name).join(', '), group:false }));
+  if(!(box && box.dataset.noGroups)) knownGroups.forEach(g=>{ if(!pool.some(x=>x.name===g.name)) pool.push({ name:g.name, sub:g.kind, group:true }); });
+  const hits = pool
+    .filter(x=> x.name.toLowerCase().includes(q) && !taken.includes(x.name))
+    .sort((a,b)=> (b.name.toLowerCase().startsWith(q)) - (a.name.toLowerCase().startsWith(q)) || a.name.localeCompare(b.name,'ko'))
     .slice(0, 8);
-  if(!hits.length || (hits.length===1 && hits[0]===input.value.trim())){ list.classList.remove('show'); list.innerHTML=''; return; }
-  list.innerHTML = hits.map((n,i)=>{
-    const g = groupNamesOf(n);
-    return `<div class="ac-item ${i===0?'active':''}" data-name="${escapeHtml(n)}"><span>${escapeHtml(n)}</span>${g.length?`<small>${escapeHtml(g.join(', '))}</small>`:''}</div>`;
-  }).join('');
+  if(!hits.length || (hits.length===1 && hits[0].name===input.value.trim())){ list.classList.remove('show'); list.innerHTML=''; return; }
+  list.innerHTML = hits.map((x,i)=>
+    `<div class="ac-item ${i===0?'active':''}" data-name="${escapeHtml(x.name)}"><span>${escapeHtml(x.name)}</span>${x.group?`<em class="ac-kind">${escapeHtml(x.sub)}</em>`:(x.sub?`<small>${escapeHtml(x.sub)}</small>`:'')}</div>`
+  ).join('');
   list.classList.add('show');
 }
 function acPick(input, name){
@@ -965,27 +972,40 @@ let namesList = [];
 function actsOf(name){ return scheduleCache.filter(s=>s.artists.includes(name)).sort((a,b)=>a.startDate.localeCompare(b.startDate)); }
 function membersOf(gid){ return knownArtists.filter(a=>(a.groups||[]).includes(gid)).map(a=>a.name); }
 function renderNames(body){
-  namesList = knownArtists.slice().sort((a,b)=>a.name.localeCompare(b.name,'ko'));
-  const idx = new Map(namesList.map((a,i)=>[a.name,i]));
+  // 아티스트와 그룹을 한 표에
+  const artistRows = knownArtists.map(a=>({ type:'artist', name:a.name, groups:a.groups||[] }));
+  const groupRows = knownGroups.map(g=>({ type:'group', name:g.name, id:g.id, kind:g.kind }));
+  namesList = artistRows.concat(groupRows).sort((a,b)=>a.name.localeCompare(b.name,'ko'));
+  const idx = new Map(namesList.map((r,i)=>[r,i]));
   const gname = id => (knownGroups.find(g=>g.id===id)||{}).name;
+  const kindOrder = ['아티스트','그룹','레이블','기타'];
   const cols = [
-    { key:'name', label:'아티스트', text:a=>a.name, html:a=>`<b>${escapeHtml(a.name)}</b>` },
-    { key:'groups', label:'그룹', values:a=>(a.groups||[]).map(gname).filter(Boolean),
-      html:a=>(a.groups||[]).map(id=>knownGroups.find(g=>g.id===id)).filter(Boolean).map(g=>`<span class="grp-chip" onclick="event.stopPropagation(); openGroupModal('${g.id}')">${escapeHtml(g.name)}</span>`).join(' ') || '<span class="muted">-</span>' },
-    { key:'count', label:'활동 수', text:a=>String(actsOf(a.name).length), sort:a=>actsOf(a.name).length, valueSort:(x,y)=>(+x)-(+y) },
-    { key:'acts', label:'활동 내역', tdClass:'acts-cell', values:a=>Array.from(new Set(actsOf(a.name).map(s=>(CATEGORIES[s.category]||{label:s.category}).label))), valueSort:catValueSort,
-      sort:a=>(actsOf(a.name)[0]||{startDate:'9999'}).startDate,
-      html:a=>{ const acts = actsOf(a.name); return acts.length ? `<div class="acts">${acts.map(s=>{ const c = CATEGORIES[s.category]||{label:s.category,color:'#888'};
-        return `<button type="button" class="act" onclick="openScheduleForm('${s.id}')" title="눌러서 이 일정 수정"><span class="dot" style="background:${c.color}"></span>${shortRange(s)} · ${escapeHtml(c.label)}${s.title?' · '+escapeHtml(s.title):''}${s.artists.length>1?` <small>(${escapeHtml(s.artists.filter(x=>x!==a.name).join(', '))}와 함께)</small>`:''}</button>`; }).join('')}</div>` : '<span class="muted">활동 없음</span>'; } },
-    { key:'act', label:'관리', filter:false, html:a=>{ const i = idx.get(a.name);
-      return `<div class="row-actions"><button onclick="openRenameArtist(${i})">이름 수정</button><button onclick="openArtistGroups(${i})">그룹</button><button class="del" onclick="confirmDeleteArtist(${i})">삭제</button></div>`; } },
+    { key:'name', label:'이름', text:r=>r.name, html:r=>`<b>${escapeHtml(r.name)}</b>` },
+    { key:'type', label:'구분', text:r=> r.type==='artist' ? '아티스트' : r.kind, valueSort:(x,y)=>kindOrder.indexOf(x)-kindOrder.indexOf(y),
+      html:r=> r.type==='artist' ? '<span class="kind-badge">아티스트</span>' : `<span class="kind-badge grp">${escapeHtml(r.kind)}</span>` },
+    { key:'link', label:'소속 / 멤버', values:r=> r.type==='artist' ? r.groups.map(gname).filter(Boolean) : membersOf(r.id),
+      html:r=>{
+        if(r.type==='artist'){
+          const gs = r.groups.map(id=>knownGroups.find(g=>g.id===id)).filter(Boolean);
+          return gs.length ? gs.map(g=>`<span class="grp-chip" onclick="openGroupModal('${g.id}')">${escapeHtml(g.name)}</span>`).join(' ') : '<span class="muted">-</span>';
+        }
+        const m = membersOf(r.id);
+        return m.length ? `<span class="member-list">${m.map(escapeHtml).join(', ')}</span>` : '<span class="muted">멤버 없음</span>';
+      } },
+    { key:'count', label:'활동 수', text:r=>String(actsOf(r.name).length), sort:r=>actsOf(r.name).length, valueSort:(x,y)=>(+x)-(+y) },
+    { key:'acts', label:'활동 내역', tdClass:'acts-cell', values:r=>Array.from(new Set(actsOf(r.name).map(s=>(CATEGORIES[s.category]||{label:s.category}).label))), valueSort:catValueSort,
+      sort:r=>(actsOf(r.name)[0]||{startDate:'9999'}).startDate,
+      html:r=>{ const acts = actsOf(r.name); return acts.length ? `<div class="acts">${acts.map(s=>{ const c = CATEGORIES[s.category]||{label:s.category,color:'#888'};
+        const others = s.artists.filter(x=>x!==r.name);
+        return `<button type="button" class="act" onclick="openScheduleForm('${s.id}')" title="눌러서 이 일정 수정"><span class="dot" style="background:${c.color}"></span>${shortRange(s)} · ${escapeHtml(c.label)}${s.title?' · '+escapeHtml(s.title):''}${others.length?` <small>(${escapeHtml(others.join(', '))})</small>`:''}</button>`; }).join('')}</div>` : '<span class="muted">활동 없음</span>'; } },
+    { key:'act', label:'관리', filter:false, html:r=>{ const i = idx.get(r);
+      return r.type==='artist'
+        ? `<div class="row-actions"><button onclick="openRenameArtist(${i})">이름 수정</button><button onclick="openArtistGroups(${i})">소속</button><button onclick="openToGroup(${i})">그룹으로 전환</button><button class="del" onclick="confirmDeleteArtist(${i})">삭제</button></div>`
+        : `<div class="row-actions"><button onclick="openGroupModal('${r.id}')">수정</button><button onclick="confirmToArtist('${r.id}')">아티스트로 전환</button><button class="del" onclick="doDeleteGroup('${r.id}')">삭제</button></div>`; } },
   ];
   body.innerHTML = `
     <div class="admin-toolbar">
-      <div class="group-bar">
-        <span class="group-bar-label">그룹</span>
-        ${knownGroups.length ? knownGroups.slice().sort((a,b)=>a.name.localeCompare(b.name,'ko')).map(g=>`<button type="button" class="grp-chip big" onclick="openGroupModal('${g.id}')"><small>${escapeHtml(g.kind)}</small> ${escapeHtml(g.name)} <small>${membersOf(g.id).length}명</small></button>`).join('') : '<span class="muted">아직 그룹이 없어요</span>'}
-      </div>
+      <span class="view-label" style="margin:0">아티스트 ${artistRows.length}명 · 그룹 ${groupRows.length}개</span>
       <div style="display:flex;gap:8px">
         <button class="btn-ghost" onclick="openGroupModal(null)">+ 그룹 만들기</button>
         <button class="add-btn" onclick="openAddArtist()">+ 아티스트 추가</button>
@@ -995,8 +1015,36 @@ function renderNames(body){
       rerender: renderBody,
       defaultSort: (a,b)=> a.name.localeCompare(b.name,'ko'),
       empty: '등록된 아티스트가 없어요. 일정을 추가하면 자동으로 등록돼요.',
-      row: (a, cells)=>`<tr>${cells}</tr>`,
+      row: (r, cells)=>`<tr>${cells}</tr>`,
     })}`;
+}
+function openToGroup(i){
+  const a = namesList[i]; if(!a) return;
+  openModal(`<div class="modal-tag" style="background:var(--accent)">그룹으로 전환</div>
+    <div class="modal-form-grid">
+      <p class="form-hint"><b>${escapeHtml(a.name)}</b>을(를) 그룹으로 바꿔요. 이 이름이 들어간 일정은 그대로 유지되고, 전환한 뒤 소속 멤버를 지정할 수 있어요.${a.groups.length?' 이 아티스트에 지정돼 있던 소속 정보는 사라져요.':''}</p>
+      <div class="field"><label>종류</label><select id="tg-kind">${['그룹','레이블','기타'].map(k=>`<option>${k}</option>`).join('')}</select></div>
+    </div>
+    <div class="modal-form-actions"><button class="btn-ghost" onclick="closeModal()">취소</button><button class="btn-primary" onclick="doToGroup(${i})">전환</button></div>`);
+}
+async function doToGroup(i){
+  const a = namesList[i];
+  try{
+    const g = await apiCall('resource=artists&action=togroup', {method:'POST', headers:JSON_HEADERS, body:JSON.stringify({name:a.name, kind:document.getElementById('tg-kind').value})});
+    await reloadAfter(`'${a.name}'을(를) ${g.kind}(으)로 바꿨어요.`);
+    openGroupModal(g.id);
+  }catch(e){ showToast(e.message); }
+}
+function confirmToArtist(id){
+  const g = knownGroups.find(x=>x.id===id); if(!g) return;
+  const m = membersOf(id).length;
+  openModal(`<div class="modal-tag" style="background:var(--accent)">아티스트로 전환</div>
+    <div class="modal-rows"><div class="modal-row"><span class="modal-value small"><b>${escapeHtml(g.name)}</b>을(를) 아티스트로 바꿀까요? 이 이름이 들어간 일정은 그대로 유지돼요.${m?` 소속 멤버 ${m}명과의 연결은 풀려요.`:''}</span></div></div>
+    <div class="modal-form-actions"><button class="btn-ghost" onclick="closeModal()">취소</button><button class="btn-primary" onclick="doToArtist('${id}')">전환</button></div>`);
+}
+async function doToArtist(id){
+  try{ const r = await apiCall('resource=groups&action=toartist&id='+encodeURIComponent(id), {method:'POST', headers:JSON_HEADERS, body:'{}'}); await reloadAfter(`'${r.name}'을(를) 아티스트로 바꿨어요.`); }
+  catch(e){ showToast(e.message); }
 }
 async function reloadAfter(msg){ await refreshCaches(); closeModal(); render(); if(msg) showToast(msg); }
 function openAddArtist(){
@@ -1088,8 +1136,8 @@ function openGroupModal(id){
       <div class="field"><label>종류</label><select id="gm-kind">${['그룹','레이블','기타'].map(k=>`<option ${g&&g.kind===k?'selected':''}>${k}</option>`).join('')}</select></div>
       <div class="field"><label>그룹 이름</label><input type="text" id="gm-name" value="${g?escapeHtml(g.name):''}" autocomplete="off"></div>
       <div class="field"><label>소속 아티스트</label></div>
-      ${artistFieldsHtml('gm', g ? membersOf(g.id) : [])}
-      <p class="form-hint">메인 페이지에서 그룹 이름으로 검색하면 소속 아티스트 일정이 모두 나와요.</p>
+      ${artistFieldsHtml('gm', g ? membersOf(g.id) : [], {noGroups:true})}
+      <p class="form-hint">그룹 이름은 일정의 아티스트 칸에도 쓸 수 있어요. 이름을 바꾸면 그 이름으로 적힌 일정에도 함께 반영돼요. 메인에서 그룹 이름으로 검색하면 소속 아티스트 일정까지 같이 나와요.</p>
     </div>
     <div class="modal-form-actions">
       ${g?`<button class="btn-danger" style="margin-right:auto" onclick="doDeleteGroup('${g.id}')">그룹 삭제</button>`:''}
