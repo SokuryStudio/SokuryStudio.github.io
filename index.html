@@ -452,6 +452,18 @@
   .form-card .artist-fields{margin-bottom:16px;}
   .note-text{white-space:pre-wrap;word-break:break-word;}
   .related-note{font-size:11px;color:var(--accent);font-weight:700;margin-top:2px;}
+  /* ---- 카테고리별 날짜 입력 ---- */
+  .when-box{display:flex;flex-direction:column;gap:0;}
+  .when-box > .field, .range-block .field{margin-bottom:12px;}
+  .time-group{display:flex;align-items:center;gap:8px;max-width:220px;}
+  .time-group input{text-align:center;}
+  .time-group span{font-weight:900;color:var(--text-faint);}
+  .range-list{display:flex;flex-direction:column;gap:10px;margin-bottom:14px;}
+  .range-block{border:1px solid var(--border);border-radius:12px;padding:12px 12px 0;background:var(--surface);}
+  .when-box > .range-block{border:none;padding:0;background:none;}
+  .range-head{display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;font-size:13px;}
+  .range-remove{width:24px;height:24px;border-radius:50%;border:none;background:var(--surface-2);color:var(--text-faint);cursor:pointer;font-size:11px;}
+  .range-remove:hover{color:var(--danger);}
 </style>
 </head>
 <body>
@@ -613,7 +625,7 @@ function openScheduleModal(id){
   openModal(`
     <div class="modal-tag" style="background:${cat.color}">${escapeHtml(cat.label)}</div>
     <div class="modal-rows">
-      <div class="modal-row"><span class="modal-label">일정</span><span class="modal-value">${fmtDateRangeKR(s.startDate, s.endDate)}</span></div>
+      <div class="modal-row"><span class="modal-label">일정</span><span class="modal-value">${fmtWhenKR(s)}</span></div>
       <div class="modal-row"><span class="modal-label">아티스트</span><span class="modal-value">${escapeHtml(s.artist)}</span></div>
       <div class="modal-row"><span class="modal-label">항목</span><span class="modal-value">${s.title?escapeHtml(s.title):'-'}</span></div>
       ${s.venue?`<div class="modal-row"><span class="modal-label">공연장</span><span class="modal-value">${escapeHtml(s.venue)}</span></div>`:''}
@@ -655,7 +667,7 @@ function openShareModal(id){
     <div class="share-card">
       <div class="tag" style="background:${cat.color}">${escapeHtml(cat.label)}</div>
       <div class="artist">${escapeHtml(s.artist)}</div>
-      <div class="date">${fmtDateRangeKR(s.startDate, s.endDate)}${s.title?' · '+escapeHtml(s.title):''}${s.venue?' · '+escapeHtml(s.venue):''}</div>
+      <div class="date">${fmtWhenKR(s)}${s.title?' · '+escapeHtml(s.title):''}${s.venue?' · '+escapeHtml(s.venue):''}</div>
       <div class="likes">❤️ ${s.likes||0}</div>
     </div>
     <div class="share-input-row">
@@ -773,7 +785,7 @@ let sideOpen = false;
 const sideState = { q:'', cat:'all', from:['','',''], to:['','',''] };
 function todaySchedules(){
   const t = todayISO();
-  return scheduleCache.filter(s=> s.startDate<=t && s.endDate>=t && (s.category!=='physical' || calShowPhysical))
+  return scheduleCache.filter(s=> overlapsAny(s,t,t) && (s.category!=='physical' || calShowPhysical))
     .sort((a,b)=> (b.likes||0)-(a.likes||0));
 }
 function toggleSide(){ sideOpen = !sideOpen; renderMainPage(document.getElementById('app')); }
@@ -789,7 +801,7 @@ function todayWidgetHtml(){
     body = `<div class="today-card" role="button" tabindex="0" onclick="openScheduleModal('${s.id}')">
       <span class="tag" style="background:${cat.color}">${escapeHtml(cat.label)}</span>
       <div class="artist">${escapeHtml(s.artist)}</div>
-      <div class="meta">${s.title?escapeHtml(s.title):fmtDateRangeKR(s.startDate, s.endDate)}${s.venue?' · '+escapeHtml(s.venue):''}</div>
+      <div class="meta">${s.title?escapeHtml(s.title):fmtWhenKR(s)}${s.time?' · '+s.time:''}${s.venue?' · '+escapeHtml(s.venue):''}</div>
       <span class="likes">❤️ ${s.likes||0}</span>
       ${list.length>1 ? `<button type="button" class="today-more" onclick="event.stopPropagation(); if(!sideOpen) toggleSide();">+${list.length-1}</button>` : ''}
     </div>`;
@@ -870,7 +882,7 @@ function renderSideResults(){
     list = scheduleCache.filter(s=>
       (!q || (s.artists||[s.artist]).some(n=>related.has(n) || String(n).toLowerCase().includes(q)) || String(s.title||'').toLowerCase().includes(q)) &&
       (sideState.cat==='all' || s.category===sideState.cat) &&
-      (!from || s.endDate >= from) && (!to || s.startDate <= to)
+      ((!from && !to) || overlapsAny(s, from || '0000-01-01', to || '9999-12-31'))
     ).sort((a,b)=> a.startDate.localeCompare(b.startDate) || (b.likes||0)-(a.likes||0));
     cnt.innerHTML = `검색 결과 ${list.length}건` + (hitGroups.length ? `<div class="related-note">${hitGroups.map(g=>escapeHtml(g.name)).join(', ')} 소속 아티스트 포함</div>` : '')
       + (myGroups.length ? `<div class="related-note">소속 그룹(${Array.from(new Set(myGroups)).map(escapeHtml).join(', ')}) 일정 포함</div>` : '');
@@ -884,7 +896,7 @@ function renderSideResults(){
     return `<button type="button" class="s-card" onclick="openScheduleModal('${s.id}')">
       <span class="tag" style="background:${cat.color}">${escapeHtml(cat.label)}</span>
       <div class="artist">${escapeHtml(s.artist)}</div>
-      <div class="date">${fmtDateRangeKR(s.startDate, s.endDate)}${s.title?' · '+escapeHtml(s.title):''}${s.venue?' · '+escapeHtml(s.venue):''}</div>
+      <div class="date">${fmtWhenKR(s)}${s.title?' · '+escapeHtml(s.title):''}${s.venue?' · '+escapeHtml(s.venue):''}</div>
       <div class="likes">❤️ ${s.likes||0}</div>
     </button>`;
   }).join('');
@@ -922,16 +934,17 @@ function renderMainPage(app){
 
   // 날짜별 보이는 일정 (+N개 목록용)
   calDayItems = {};
-  visible.forEach(s=> eachDateInRange(s.startDate, s.endDate).forEach(iso=>{ (calDayItems[iso] = calDayItems[iso]||[]).push(s); }));
+  visible.forEach(s=> rangesOf(s).forEach(r=> eachDateInRange(r.start, r.end).forEach(iso=>{ (calDayItems[iso] = calDayItems[iso]||[]).push(s); })));
 
   // 위쪽(발매) 칩: 날짜별
   const topByDate = {};
   visible.filter(s=>TOP_CATS.includes(s.category)).forEach(s=>
-    eachDateInRange(s.startDate, s.endDate).forEach(iso=>{ (topByDate[iso] = topByDate[iso]||[]).push(s); }));
+    rangesOf(s).forEach(r=> eachDateInRange(r.start, r.end).forEach(iso=>{ (topByDate[iso] = topByDate[iso]||[]).push(s); })));
 
   // 아래쪽(콘서트·피지컬): 이어지는 막대
   const barItems = visible.filter(s=>BOTTOM_CATS.includes(s.category))
-    .sort((a,b)=> a.startDate.localeCompare(b.startDate) || b.endDate.localeCompare(a.endDate) || BOTTOM_CATS.indexOf(a.category)-BOTTOM_CATS.indexOf(b.category));
+    .flatMap(s=> rangesOf(s).map(r=>({ s, start:r.start, end:r.end })))   // 콘서트 기간이 여러 개면 기간마다 따로
+    .sort((a,b)=> a.start.localeCompare(b.start) || b.end.localeCompare(a.end) || BOTTOM_CATS.indexOf(a.s.category)-BOTTOM_CATS.indexOf(b.s.category));
 
   const weekdayNames = ['일','월','화','수','목','금','토'];
   const legendHtml = ALL_CATS.filter(k=>k!=='physical').map(k=>`
@@ -947,10 +960,10 @@ function renderMainPage(app){
     const isoList = days.map(isoOf);
 
     // 이 주에 걸치는 막대 조각
-    const segs = barItems.filter(s=> s.startDate <= last && s.endDate >= first).map(s=>{
-      const a = s.startDate < first ? first : s.startDate;
-      const b = s.endDate > last ? last : s.endDate;
-      return { s, c0: isoList.indexOf(a), c1: isoList.indexOf(b), contL: s.startDate < first, contR: s.endDate > last };
+    const segs = barItems.filter(x=> x.start <= last && x.end >= first).map(x=>{
+      const a = x.start < first ? first : x.start;
+      const b = x.end > last ? last : x.end;
+      return { s:x.s, c0: isoList.indexOf(a), c1: isoList.indexOf(b), contL: x.start < first, contR: x.end > last };
     }).sort((x,y)=> x.c0-y.c0 || (y.c1-y.c0)-(x.c1-x.c0));
     // 겹치지 않게 줄(lane) 배정
     const lanes = [], hidden = [0,0,0,0,0,0,0];
@@ -973,7 +986,7 @@ function renderMainPage(app){
       const tops = topByDate[iso] || [];
       const chips = tops.slice(0,MAX_TOP).map(s=>{
         const cat = CATEGORIES[s.category];
-        return `<button class="chip" style="background:${cat.color}" title="${escapeHtml(s.artist)} · ${cat.label}" onclick="openScheduleModal('${s.id}')">${escapeHtml(s.artist)}</button>`;
+        return `<button class="chip" style="background:${cat.color}" title="${escapeHtml(s.artist)} · ${cat.label}${s.time?' · '+s.time:''}" onclick="openScheduleModal('${s.id}')">${escapeHtml(s.artist)}</button>`;
       }).join('');
       const more = tops.length>MAX_TOP ? `<button class="chip more" onclick="openCalDay('${iso}')">+${tops.length-MAX_TOP}개</button>` : '';
       const cls = [c.other?'other-month':'', iso===todayISO()?'today':'', i===0?'sun':'', i===6?'sat':''].join(' ');
@@ -1059,7 +1072,7 @@ function getUpcomingList(){
   let list = scheduleCache.filter(s=> daysUntil(s.endDate) >= 0);
   if(panelState.right !== 'all') list = list.filter(s=>s.category===panelState.right);
   else if(!panelState.rightPhysical) list = list.filter(s=>s.category!=='physical');
-  return list.slice().sort((a,b)=> a.startDate.localeCompare(b.startDate)).slice(0,6);
+  return list.slice().sort((a,b)=> nextRangeOf(a).start.localeCompare(nextRangeOf(b).start) || (a.time||'').localeCompare(b.time||'')).slice(0,6);
 }
 function renderMainPanelsOnly(){
   renderPanel('panel-left', getTopLikedList());
@@ -1075,15 +1088,17 @@ function renderPanel(elId, list){
     if(elId==='panel-left'){
       metric = `❤️ ${s.likes||0}`;
     } else {
-      const dLeft = daysUntil(s.startDate);
+      const nr = nextRangeOf(s);
+      const dLeft = daysUntil(nr.start);
       if(dLeft > 0) metric = 'D-'+dLeft;
-      else if(daysUntil(s.endDate) >= 0) metric = '진행중';
+      else if(dLeft === 0 && nr.start === nr.end) metric = 'D-DAY';
+      else if(daysUntil(nr.end) >= 0) metric = '진행중';
       else metric = 'D-DAY';
     }
     return `<li class="panel-item" onclick="openScheduleModal('${s.id}')">
       <span class="rank">${i+1}</span>
       <span class="tag" style="background:${cat.color}">${escapeHtml(cat.label)}</span>
-      <div class="info"><div class="artist">${escapeHtml(s.artist)}</div><div class="date">${fmtDateRangeKR(s.startDate, s.endDate)}</div></div>
+      <div class="info"><div class="artist">${escapeHtml(s.artist)}</div><div class="date">${fmtWhenKR(s)}</div></div>
       <span class="metric">${metric}</span>
     </li>`;
   }).join('');
@@ -1111,67 +1126,25 @@ function renderApplyPage(app){
         ? `<p class="login-hint"><b>${escapeHtml(currentUser.email)}</b> 계정으로 신청돼요. 진행 상황은 <a href="#/my">내 신청</a>에서 확인할 수 있어요.</p>`
         : `<p class="login-hint"><button type="button" onclick="openLoginModal()">로그인</button>하고 신청하면 '내 신청'에서 진행 상황을 확인할 수 있어요.</p>`}
       <form id="apply-form">
-        <div class="field">
-          <label>시작일</label>
-          <div class="date-group">
-            <input class="y" type="text" inputmode="numeric" maxlength="4" placeholder="YYYY" id="start-y" autocomplete="off">
-            <input class="m" type="text" inputmode="numeric" maxlength="2" placeholder="MM" id="start-m" autocomplete="off">
-            <input class="d" type="text" inputmode="numeric" maxlength="2" placeholder="DD" id="start-d" autocomplete="off">
-          </div>
-          <div class="date-group-label"><span>년</span><span>월</span><span>일</span></div>
-        </div>
-        <div class="field">
-          <label>종료일</label>
-          <div class="date-group">
-            <input class="y" type="text" inputmode="numeric" maxlength="4" placeholder="YYYY" id="end-y" autocomplete="off">
-            <input class="m" type="text" inputmode="numeric" maxlength="2" placeholder="MM" id="end-m" autocomplete="off">
-            <input class="d" type="text" inputmode="numeric" maxlength="2" placeholder="DD" id="end-d" autocomplete="off">
-          </div>
-          <div class="date-group-label"><span>년</span><span>월</span><span>일</span></div>
-        </div>
-        ${artistFieldsHtml('apply', [])}
-        <div class="field"><label>카테고리</label>
-          <select name="category" id="apply-category" required>
-            ${ALL_CATS.map(k=>`<option value="${k}">${CATEGORIES[k].label}</option>`).join('')}
-          </select>
-        </div>
-        <div class="field"><label>일정</label><input type="text" name="name" required></div>
-        <div class="field" id="apply-venue-wrap" style="display:none"><label>공연장</label><input type="text" name="venue" id="apply-venue"></div>
-        <div class="field"><label>비고</label><textarea name="note"></textarea></div>
+        <div id="apply-fields">${scheduleFormHtml('apply', {})}</div>
         <button type="submit" class="submit-btn">신청서 제출</button>
       </form>
     </div>
   `;
-  setupDateRangeInputs();
-  bindVenueToggle('apply-category', 'apply-venue-wrap');
+  bindScheduleForm('apply');
   if(!knownArtists.length) loadArtistDb();
   document.getElementById('apply-form').addEventListener('submit', async function(e){
     e.preventDefault();
-    const fd = new FormData(e.target);
-    const startDate = readDateGroup('start');
-    const endDate = readDateGroup('end');
-    if(!startDate){ showToast('시작일을 올바르게 입력해주세요.'); return; }
-    if(!endDate){ showToast('종료일을 올바르게 입력해주세요.'); return; }
-    if(endDate < startDate){ showToast('종료일이 시작일보다 빠를 수 없습니다.'); return; }
-    const artists = readArtistFields('apply');
-    if(!artists.length){ showToast('아티스트를 1명 이상 입력해주세요.'); return; }
-    const application = {
-      startDate, endDate,
-      artists,
-      category: fd.get('category'),
-      name: fd.get('name').trim(),
-      venue: fd.get('category')==='concert' ? (fd.get('venue')||'').trim() : '',
-      note: (fd.get('note')||'').trim(),
-    };
+    const r = readScheduleForm('apply');
+    if(r.error){ showToast(r.error); return; }
+    const { title, ...rest } = r.data;
     const submitBtn = e.target.querySelector('.submit-btn');
     submitBtn.disabled = true;
     try{
-      await Api.submitApplication(application);
+      await Api.submitApplication({ ...rest, name: title });
       showToast('신청이 접수되었습니다. 감사합니다!');
-      e.target.reset();
-      setupDateRangeInputs();
-      bindVenueToggle('apply-category', 'apply-venue-wrap');
-      document.getElementById('apply-artists').outerHTML = artistFieldsHtml('apply', []);
+      document.getElementById('apply-fields').innerHTML = scheduleFormHtml('apply', {});
+      bindScheduleForm('apply');
     }catch(err){
       showToast('신청 접수에 실패했습니다: ' + err.message);
     }finally{
@@ -1179,7 +1152,6 @@ function renderApplyPage(app){
     }
   });
 }
-
 
 /* =========================================================
    구글 로그인
@@ -1286,7 +1258,7 @@ async function renderMyPage(app){
       <span class="tag" style="background:${cat.color};color:#fff;font-size:10px;font-weight:700;padding:3px 8px;border-radius:999px;white-space:nowrap">${escapeHtml(cat.label)}</span>
       <div class="info">
         <div class="t1">${escapeHtml(a.artist)} · ${escapeHtml(a.name)}</div>
-        <div class="t2">${fmtDateRangeKR(a.startDate, a.endDate)}${a.venue?' · '+escapeHtml(a.venue):''}<br>신청일 ${fmtDateKR(fmtDateISO(new Date(a.createdAt)))}</div>
+        <div class="t2">${fmtWhenKR(a)}${a.venue?' · '+escapeHtml(a.venue):''}<br>신청일 ${fmtDateKR(fmtDateISO(new Date(a.createdAt)))}</div>
       </div>
       ${status}
     </li>`;
@@ -1402,6 +1374,153 @@ document.addEventListener('keydown', e=>{
     list.classList.remove('show');
   }
 });
+
+/* =========================================================
+   카테고리별 일정 양식
+   - 발매(정규·EP·싱글·컴필레이션·믹스테입): 발매일 하루 + 시간
+   - 콘서트: 시작일·종료일 여러 개
+   - 피지컬: 시작일·종료일 한 쌍
+========================================================= */
+const RELEASE_CATS = ['regular','ep','single','mixtape','compilation'];
+const isRelease = c => RELEASE_CATS.includes(c);
+function rangesOf(s){ return (s.ranges && s.ranges.length) ? s.ranges : [{ start:s.startDate, end:s.endDate }]; }
+function overlapsAny(s, from, to){ return rangesOf(s).some(r=> r.start<=to && r.end>=from); }
+function nextRangeOf(s){ const t = fmtDateISO(new Date()); const rs = rangesOf(s); return rs.find(r=>r.end>=t) || rs[rs.length-1]; }
+function fmtRangeCompact(a, b, withYear){
+  const [y1,m1,d1] = a.split('-').map(Number), [y2,m2,d2] = b.split('-').map(Number);
+  const first = withYear ? `${y1}년 ${m1}월 ${d1}일` : `${m1}월 ${d1}일`;
+  if(a===b) return first;
+  if(y1===y2 && m1===m2) return `${first} ~ ${d2}일`;
+  if(y1===y2) return `${first} ~ ${m2}월 ${d2}일`;
+  return `${first} ~ ${y2}년 ${m2}월 ${d2}일`;
+}
+function fmtWhenKR(s){
+  if(isRelease(s.category)) return fmtDateKR(s.startDate) + (s.time ? ' ' + s.time : '');
+  let prevY = null;
+  return rangesOf(s).map(r=>{ const y = r.start.slice(0,4); const t = fmtRangeCompact(r.start, r.end, y!==prevY); prevY = y; return t; }).join(', ');
+}
+
+let rangeSeq = 0;
+function dateFieldHtml(id, label, iso){
+  const [y,m,d] = (iso||'').split('-');
+  const inp = (cls, len, ph, v, suf)=>`<input class="${cls}" type="text" inputmode="numeric" maxlength="${len}" placeholder="${ph}" id="${id}-${suf}" value="${v||''}" autocomplete="off">`;
+  return `<div class="field"><label>${label}</label><div class="date-group">${inp('y',4,'YYYY',y,'y')}${inp('m',2,'MM',m,'m')}${inp('d',2,'DD',d,'d')}</div>
+    <div class="date-group-label"><span>년</span><span>월</span><span>일</span></div></div>`;
+}
+function rangeBlockHtml(p, i, r, multi){
+  const rid = `${p}-g${rangeSeq++}`;
+  return `<div class="range-block" data-rid="${rid}">
+    ${multi ? `<div class="range-head"><b>기간 ${i+1}</b>${i>0 ? `<button type="button" class="range-remove" onclick="removeRangeBlock(this)" title="빼기">✕</button>` : ''}</div>` : ''}
+    ${dateFieldHtml(rid+'-s', '시작일', r.start)}${dateFieldHtml(rid+'-e', '종료일', r.end)}
+  </div>`;
+}
+function whenSectionHtml(p, cat, v){
+  v = v || {};
+  if(isRelease(cat)){
+    const [hh, mm] = (v.time||'').split(':');
+    return `${dateFieldHtml(p+'-rd', '발매일', v.startDate)}
+      <div class="field"><label>시간</label><div class="time-group">
+        <input id="${p}-hh" type="text" inputmode="numeric" maxlength="2" placeholder="HH" value="${hh||''}" autocomplete="off"><span>:</span>
+        <input id="${p}-mm" type="text" inputmode="numeric" maxlength="2" placeholder="MM" value="${mm||''}" autocomplete="off">
+      </div></div>`;
+  }
+  const rs = (cat==='concert' && v.ranges && v.ranges.length) ? v.ranges : [{ start:v.startDate||'', end:v.endDate||'' }];
+  if(cat==='concert'){
+    return `<div class="range-list" id="${p}-ranges">${rs.map((r,i)=>rangeBlockHtml(p, i, r, true)).join('')}
+      <button type="button" class="artist-add" onclick="addRangeBlock('${p}')">+ 기간 추가</button></div>`;
+  }
+  return rangeBlockHtml(p, 0, rs[0], false);
+}
+function bindPair(rid){
+  const parts = ['y','m','d'], lim = { y:[4,null], m:[2,12], d:[2,31] };
+  parts.forEach(k=>{ ['s','e'].forEach(se=>{ const el = document.getElementById(`${rid}-${se}-${k}`); if(el && !el.dataset.bound){ clampDigits(el, lim[k][0], lim[k][1]); el.dataset.bound = '1'; } }); });
+  parts.forEach(k=>{
+    const s = document.getElementById(`${rid}-s-${k}`);
+    if(s && !s.dataset.copy){ s.dataset.copy = '1'; s.addEventListener('input', ()=>{ parts.forEach(q=>{ document.getElementById(`${rid}-e-${q}`).value = document.getElementById(`${rid}-s-${q}`).value; }); }); }
+  });
+}
+function bindWhenSection(p){
+  const box = document.getElementById(p+'-when'); if(!box) return;
+  box.querySelectorAll('.range-block').forEach(b=> bindPair(b.dataset.rid));
+  const rd = { y:[4,null], m:[2,12], d:[2,31] };
+  Object.keys(rd).forEach(k=>{ const el = document.getElementById(`${p}-rd-${k}`); if(el && !el.dataset.bound){ clampDigits(el, rd[k][0], rd[k][1]); el.dataset.bound='1'; } });
+  [['hh',23],['mm',59]].forEach(([k,max])=>{ const el = document.getElementById(`${p}-${k}`); if(el && !el.dataset.bound){ clampDigits(el, 2, max); el.dataset.bound='1'; } });
+}
+function addRangeBlock(p){
+  const list = document.getElementById(p+'-ranges');
+  const n = list.querySelectorAll('.range-block').length;
+  list.querySelector('.artist-add').insertAdjacentHTML('beforebegin', rangeBlockHtml(p, n, {start:'',end:''}, true));
+  const blocks = list.querySelectorAll('.range-block');
+  const b = blocks[blocks.length-1]; bindPair(b.dataset.rid);
+  document.getElementById(`${b.dataset.rid}-s-y`).focus();
+}
+function removeRangeBlock(btn){
+  const list = btn.closest('.range-list');
+  btn.closest('.range-block').remove();
+  list.querySelectorAll('.range-head b').forEach((el,i)=> el.textContent = `기간 ${i+1}`);
+}
+// 카테고리를 바꿀 때 이미 쓴 날짜를 최대한 옮기기 위해 오류 없이 읽기
+function peekWhen(p, cat){
+  if(isRelease(cat)){ const d = readDateGroup(p+'-rd'); const hh = (document.getElementById(p+'-hh')||{}).value, mm = (document.getElementById(p+'-mm')||{}).value;
+    return { startDate:d||'', endDate:d||'', time: hh ? `${hh.padStart(2,'0')}:${(mm||'0').padStart(2,'0')}` : '' }; }
+  const rs = Array.from(document.querySelectorAll(`#${p}-when .range-block`)).map(b=>({ start: readDateGroup(b.dataset.rid+'-s')||'', end: readDateGroup(b.dataset.rid+'-e')||'' })).filter(r=>r.start||r.end);
+  return { startDate: rs[0] ? rs[0].start : '', endDate: rs[0] ? rs[0].end : '', ranges: rs };
+}
+function readWhen(p, cat){
+  if(isRelease(cat)){
+    const date = readDateGroup(p+'-rd');
+    if(!date) return { error:'발매일을 올바르게 입력해주세요.' };
+    const hh = document.getElementById(p+'-hh').value.trim(), mm = document.getElementById(p+'-mm').value.trim();
+    if(!hh && mm) return { error:'시간의 시(HH)를 입력해주세요.' };
+    return { date, time: hh ? `${hh.padStart(2,'0')}:${(mm||'0').padStart(2,'0')}` : '' };
+  }
+  const ranges = [];
+  for(const b of document.querySelectorAll(`#${p}-when .range-block`)){
+    const s = readDateGroup(b.dataset.rid+'-s'), e = readDateGroup(b.dataset.rid+'-e');
+    if(!s) return { error:'시작일을 올바르게 입력해주세요.' };
+    if(!e) return { error:'종료일을 올바르게 입력해주세요.' };
+    if(e < s) return { error:'종료일이 시작일보다 빠를 수 없어요.' };
+    ranges.push({ start:s, end:e });
+  }
+  if(cat==='concert') return { ranges };
+  return { startDate: ranges[0].start, endDate: ranges[0].end };
+}
+function scheduleFormHtml(p, v){
+  v = v || {};
+  const cat = v.category || 'regular';
+  return `<div id="${p}-when" class="when-box">${whenSectionHtml(p, cat, v)}</div>
+    ${artistFieldsHtml(p, v.artists || [])}
+    <div class="field"><label>카테고리</label><select id="${p}-category">${ALL_CATS.map(k=>`<option value="${k}" ${cat===k?'selected':''}>${CATEGORIES[k].label}</option>`).join('')}</select></div>
+    <div class="field"><label id="${p}-title-label">${isRelease(cat)?'앨범명':'일정'}</label><input type="text" id="${p}-title" value="${escapeHtml(v.title||'')}" autocomplete="off"></div>
+    <div class="field" id="${p}-venue-wrap" style="${cat==='concert'?'':'display:none'}"><label>공연장</label><input type="text" id="${p}-venue" value="${escapeHtml(v.venue||'')}" autocomplete="off"></div>
+    <div class="field"><label>비고</label><textarea id="${p}-note">${escapeHtml(v.note||'')}</textarea></div>`;
+}
+function bindScheduleForm(p){
+  bindWhenSection(p);
+  const sel = document.getElementById(p+'-category');
+  sel.dataset.prev = sel.value;
+  sel.onchange = ()=>{
+    const prev = sel.dataset.prev, cat = sel.value;
+    const v = peekWhen(p, prev);
+    document.getElementById(p+'-when').innerHTML = whenSectionHtml(p, cat, v);
+    bindWhenSection(p);
+    document.getElementById(p+'-title-label').textContent = isRelease(cat) ? '앨범명' : '일정';
+    document.getElementById(p+'-venue-wrap').style.display = cat==='concert' ? '' : 'none';
+    sel.dataset.prev = cat;
+  };
+}
+function readScheduleForm(p){
+  const category = document.getElementById(p+'-category').value;
+  const when = readWhen(p, category);
+  if(when.error) return { error: when.error };
+  const artists = readArtistFields(p);
+  if(!artists.length) return { error:'아티스트를 1명 이상 입력해주세요.' };
+  const title = document.getElementById(p+'-title').value.trim();
+  if(!title) return { error: isRelease(category) ? '앨범명을 입력해주세요.' : '일정을 입력해주세요.' };
+  const venue = category==='concert' ? document.getElementById(p+'-venue').value.trim() : '';
+  const note = document.getElementById(p+'-note').value.trim();
+  return { data: { category, ...when, artists, title, venue, note } };
+}
 
 /* ---- 콘서트 선택 시에만 공연장 칸 표시 ---- */
 function bindVenueToggle(selectId, wrapId){

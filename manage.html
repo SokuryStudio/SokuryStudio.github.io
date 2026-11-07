@@ -217,6 +217,18 @@
   .grp-check{display:flex;align-items:center;gap:4px;font-size:13px;padding:6px 10px;border:1px solid var(--border);border-radius:999px;cursor:pointer;}
   .grp-check small{color:var(--text-faint);font-size:10px;}
   .grp-check input{accent-color:var(--accent);margin:0;}
+  /* ---- 카테고리별 날짜 입력 ---- */
+  .when-box{display:flex;flex-direction:column;gap:0;}
+  .when-box > .field, .range-block .field{margin-bottom:12px;}
+  .time-group{display:flex;align-items:center;gap:8px;max-width:220px;}
+  .time-group input{text-align:center;}
+  .time-group span{font-weight:900;color:var(--text-faint);}
+  .range-list{display:flex;flex-direction:column;gap:10px;margin-bottom:14px;}
+  .range-block{border:1px solid var(--border);border-radius:12px;padding:12px 12px 0;background:var(--surface);}
+  .when-box > .range-block{border:none;padding:0;background:none;}
+  .range-head{display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;font-size:13px;}
+  .range-remove{width:24px;height:24px;border-radius:50%;border:none;background:var(--surface-2);color:var(--text-faint);cursor:pointer;font-size:11px;}
+  .range-remove:hover{color:var(--danger);}
 </style>
 </head>
 <body>
@@ -450,42 +462,22 @@ function openScheduleForm(id){
   const s = id ? scheduleCache.find(x=>x.id===id) : null;
   openModal(`
     <div class="modal-tag" style="background:var(--accent)">${s?'일정 수정':'새 일정 추가'}</div>
-    <div class="modal-form-grid">
-      ${dateRangeFieldsHtml(s?s.startDate:'', s?s.endDate:'')}
-      ${artistFieldsHtml('f', s ? s.artists : [])}
-      <div class="field"><label>카테고리</label>
-        <select id="f-category">${ALL_CATS.map(k=>`<option value="${k}" ${s&&s.category===k?'selected':''}>${CATEGORIES[k].label}</option>`).join('')}</select>
-      </div>
-      <div class="field"><label>일정</label><input type="text" id="f-title" value="${s?escapeHtml(s.title||''):''}"></div>
-      <div class="field" id="f-venue-wrap" style="display:none"><label>공연장</label><input type="text" id="f-venue" value="${s?escapeHtml(s.venue||''):''}"></div>
-      <div class="field"><label>비고</label><textarea id="f-note">${s?escapeHtml(s.note||''):''}</textarea></div>
-    </div>
+    <div class="modal-form-grid">${scheduleFormHtml('f', s || {})}</div>
     <div class="modal-form-actions">
       <button class="btn-ghost" onclick="closeModal()">취소</button>
       <button class="btn-primary" id="schedule-save-btn" onclick="saveScheduleForm(${s?`'${s.id}'`:'null'})">저장</button>
     </div>
   `, {wide:true});
-  setupDateRangeInputs();
-  bindVenueToggle('f-category', 'f-venue-wrap');
+  bindScheduleForm('f');
 }
 async function saveScheduleForm(id){
-  const startDate = readDateGroup('start');
-  const endDate = readDateGroup('end');
-  const artists = readArtistFields('f');
-  const category = document.getElementById('f-category').value;
-  const title = document.getElementById('f-title').value.trim();
-  const venue = category==='concert' ? document.getElementById('f-venue').value.trim() : '';
-  const note = document.getElementById('f-note').value.trim();
-  if(!startDate){ showToast('시작일을 올바르게 입력해주세요.'); return; }
-  if(!endDate){ showToast('종료일을 올바르게 입력해주세요.'); return; }
-  if(!artists.length){ showToast('아티스트를 1명 이상 입력해주세요.'); return; }
-  if(!title){ showToast('일정을 입력해주세요.'); return; }
-  if(endDate < startDate){ showToast('종료일이 시작일보다 빠를 수 없습니다.'); return; }
+  const r = readScheduleForm('f');
+  if(r.error){ showToast(r.error); return; }
   const btn = document.getElementById('schedule-save-btn');
   if(btn) btn.disabled = true;
   try{
-    if(id){ await Api.updateSchedule(id, {startDate, endDate, artists, category, title, venue, note}); showToast('일정이 수정되었습니다.'); }
-    else{ await Api.createSchedule({startDate, endDate, artists, category, title, venue, note}); showToast('일정이 추가되었습니다.'); }
+    if(id){ await Api.updateSchedule(id, r.data); showToast('일정이 수정되었습니다.'); }
+    else{ await Api.createSchedule(r.data); showToast('일정이 추가되었습니다.'); }
     await refreshCaches();
     closeModal();
     renderBody();
@@ -524,10 +516,10 @@ function openApplicationModal(id){
   openModal(`
     <div class="modal-tag" style="background:${a.status==='pending'?cat.color:(a.status==='uploaded'?'#2b8a3e':'#c92a2a')}">${{pending:'대기중 신청',uploaded:'업로드 완료',rejected:'거절됨'}[a.status]||a.status}</div>
     <div class="modal-rows">
-      <div class="modal-row"><span class="modal-label">기간</span><span class="modal-value">${fmtDateRangeKR(a.startDate, a.endDate)}</span></div>
+      <div class="modal-row"><span class="modal-label">${isRelease(a.category)?'발매일':'기간'}</span><span class="modal-value">${fmtWhenKR(a)}</span></div>
       <div class="modal-row"><span class="modal-label">아티스트</span><span class="modal-value">${escapeHtml(a.artist)}</span></div>
       <div class="modal-row"><span class="modal-label">카테고리</span><span class="modal-value">${escapeHtml(cat.label)}</span></div>
-      <div class="modal-row"><span class="modal-label">일정</span><span class="modal-value">${escapeHtml(a.name)}</span></div>
+      <div class="modal-row"><span class="modal-label">${isRelease(a.category)?'앨범명':'일정'}</span><span class="modal-value">${escapeHtml(a.name)}</span></div>
       ${a.venue?`<div class="modal-row"><span class="modal-label">공연장</span><span class="modal-value">${escapeHtml(a.venue)}</span></div>`:''}
       <div class="modal-row"><span class="modal-label">신청 계정</span><span class="modal-value small">${a.ownerEmail?escapeHtml(a.ownerEmail):'로그인 없이 신청'}</span></div>
       ${a.note?`<div class="modal-row"><span class="modal-label">비고</span><span class="modal-value small note-text">${escapeHtml(a.note)}</span></div>`:''}
@@ -550,43 +542,23 @@ function openUploadFromApplication(appId){
   if(a.status !== 'pending'){ showToast('이미 처리된 신청이에요.'); return; }
   openModal(`
     <div class="modal-tag" style="background:var(--accent)">일정으로 업로드</div>
-    <div class="modal-form-grid">
-      ${dateRangeFieldsHtml(a.startDate, a.endDate)}
-      ${artistFieldsHtml('f', a.artists)}
-      <div class="field"><label>카테고리</label>
-        <select id="f-category">${ALL_CATS.map(k=>`<option value="${k}" ${a.category===k?'selected':''}>${CATEGORIES[k].label}</option>`).join('')}</select>
-      </div>
-      <div class="field"><label>일정</label><input type="text" id="f-title" value="${escapeHtml(a.name||'')}"></div>
-      <div class="field" id="f-venue-wrap" style="display:none"><label>공연장</label><input type="text" id="f-venue" value="${escapeHtml(a.venue||'')}"></div>
-      <div class="field"><label>비고</label><textarea id="f-note">${escapeHtml(a.note||'')}</textarea></div>
-    </div>
+    <div class="modal-form-grid">${scheduleFormHtml('f', { ...a, title: a.name })}</div>
     <div class="modal-form-actions">
       <button class="btn-ghost" onclick="closeModal()">취소</button>
       <button class="btn-primary" id="upload-btn" onclick="confirmUploadApplication('${appId}')">캘린더에 업로드</button>
     </div>
   `, {wide:true});
-  setupDateRangeInputs();
-  bindVenueToggle('f-category', 'f-venue-wrap');
+  bindScheduleForm('f');
 }
 async function confirmUploadApplication(appId){
-  const startDate = readDateGroup('start');
-  const endDate = readDateGroup('end');
-  const artists = readArtistFields('f');
-  const category = document.getElementById('f-category').value;
-  const title = document.getElementById('f-title').value.trim();
-  const venue = category==='concert' ? document.getElementById('f-venue').value.trim() : '';
-  const note = document.getElementById('f-note').value.trim();
-  if(!startDate){ showToast('시작일을 올바르게 입력해주세요.'); return; }
-  if(!endDate){ showToast('종료일을 올바르게 입력해주세요.'); return; }
-  if(!artists.length){ showToast('아티스트를 1명 이상 입력해주세요.'); return; }
-  if(!title){ showToast('일정을 입력해주세요.'); return; }
-  if(endDate < startDate){ showToast('종료일이 시작일보다 빠를 수 없습니다.'); return; }
+  const r = readScheduleForm('f');
+  if(r.error){ showToast(r.error); return; }
   const btn = document.getElementById('upload-btn');
   if(btn) btn.disabled = true;
   try{
     await Api.patchApplication(appId, {status:'uploaded'});
     try{
-      await Api.createSchedule({startDate, endDate, artists, category, title, venue, note});
+      await Api.createSchedule(r.data);
     }catch(e){
       await Api.patchApplication(appId, {status:'pending'}).catch(()=>{});
       throw e;
@@ -856,11 +828,16 @@ function clearTableFilters(key){ tState(key).filters = {}; tState(key).sort = nu
 
 const catSortIdx = (label)=> { const i = ALL_CATS.findIndex(k=>CATEGORIES[k].label===label); return i<0 ? 99 : i; };
 const catValueSort = (a,b)=> catSortIdx(a)-catSortIdx(b);
-function shortRange(s){
+function shortOne(a, b){
   const f = iso=>{ const [y,m,d]=iso.split('-'); return `${y}.${m}.${d}`; };
-  if(s.startDate===s.endDate) return f(s.startDate);
-  const [y1,m1] = s.startDate.split('-'), [y2,m2,d2] = s.endDate.split('-');
-  return `${f(s.startDate)}~${y1===y2 ? (m1===m2 ? d2 : `${m2}.${d2}`) : f(s.endDate)}`;
+  if(a===b) return f(a);
+  const [y1,m1] = a.split('-'), [y2,m2,d2] = b.split('-');
+  return `${f(a)}~${y1===y2 ? (m1===m2 ? d2 : `${m2}.${d2}`) : f(b)}`;
+}
+function shortRange(s){
+  if(s.category && isRelease(s.category)) return shortOne(s.startDate, s.startDate) + (s.time ? ' ' + s.time : '');
+  if(!s.category) return shortOne(s.startDate, s.endDate);
+  return rangesOf(s).map(r=>shortOne(r.start, r.end)).join(', ');
 }
 
 /* =========================================================
@@ -873,7 +850,7 @@ function monthsBetween(a, b){
   while(y<y2 || (y===y2 && m<=m2)){ out.push(`${y}-${String(m).padStart(2,'0')}`); m++; if(m>12){ m=1; y++; } }
   return out;
 }
-function overlaps(s, from, to){ return s.startDate <= to && s.endDate >= from; }
+function overlaps(s, from, to){ return overlapsAny(s, from, to); }
 function schedulesInMonth(ym){ return scheduleCache.filter(s=> overlaps(s, ym+'-01', ym+'-31')); }
 function scheduleMonths(){
   const cur = ymOf(todayISO());
@@ -906,12 +883,12 @@ function renderSchedules(body){
   const inMonth = schedView!=='today' && schedView!=='all';
   const mFrom = inMonth ? schedView+'-01' : null, mTo = inMonth ? schedView+'-31' : null;
   const cols = [
-    { key:'date', label:'기간', text:s=>shortRange(s), sort:s=>s.startDate+s.endDate,
+    { key:'date', label:'날짜', text:s=>shortRange(s), sort:s=>s.startDate+(s.time||'')+s.endDate,
       html:s=>`${shortRange(s)}${inMonth && s.startDate<mFrom ? '<span class="carry">이전 달부터</span>' : ''}${inMonth && s.endDate>mTo ? '<span class="carry">다음 달까지</span>' : ''}` },
     { key:'artist', label:'아티스트', values:s=>s.artists, sort:s=>s.artists.join(', '), html:s=>s.artists.map(escapeHtml).join('<span class="sep">, </span>') },
     { key:'cat', label:'카테고리', text:s=>(CATEGORIES[s.category]||{label:s.category}).label, valueSort:catValueSort, sort:s=>ALL_CATS.indexOf(s.category),
       html:s=>{ const c = CATEGORIES[s.category]||{label:s.category,color:'#888'}; return `<span class="table-cat-tag" style="background:${c.color}">${escapeHtml(c.label)}</span>`; } },
-    { key:'title', label:'일정', text:s=>s.title||'' },
+    { key:'title', label:'앨범명 / 일정', text:s=>s.title||'' },
     { key:'venue', label:'공연장', text:s=>s.venue||'' },
     { key:'likes', label:'좋아요', text:s=>String(s.likes||0), sort:s=>s.likes||0, valueSort:(a,b)=>(+a||0)-(+b||0), html:s=>`❤️ ${s.likes||0}` },
     { key:'act', label:'관리', filter:false, html:s=>`<div class="row-actions"><button onclick="openScheduleForm('${s.id}')">수정</button><button class="del" onclick="confirmDeleteSchedule('${s.id}')">삭제</button></div>` },
@@ -948,11 +925,11 @@ function renderApplications(body){
   const cols = [
     { key:'status', label:'상태', text:a=>APP_STATUS[a.status]||a.status, valueSort:(x,y)=>['대기','완료','거절'].indexOf(x)-['대기','완료','거절'].indexOf(y),
       html:a=>`<span class="status-badge ${a.status}">${APP_STATUS[a.status]||a.status}</span>` },
-    { key:'date', label:'기간', text:a=>shortRange(a), sort:a=>a.startDate },
+    { key:'date', label:'날짜', text:a=>shortRange(a), sort:a=>a.startDate+(a.time||'') },
     { key:'artist', label:'아티스트', values:a=>a.artists, sort:a=>a.artists.join(', '), html:a=>a.artists.map(escapeHtml).join('<span class="sep">, </span>') },
     { key:'cat', label:'카테고리', text:a=>(CATEGORIES[a.category]||{label:a.category}).label, valueSort:catValueSort,
       html:a=>{ const c = CATEGORIES[a.category]||{label:a.category,color:'#888'}; return `<span class="table-cat-tag" style="background:${c.color}">${escapeHtml(c.label)}</span>`; } },
-    { key:'name', label:'일정', text:a=>a.name||'' },
+    { key:'name', label:'앨범명 / 일정', text:a=>a.name||'' },
     { key:'owner', label:'신청 계정', text:a=>a.ownerEmail||'로그인 없이 신청' },
     { key:'created', label:'신청일', text:a=>shortRange({startDate:fmtDateISO(new Date(a.createdAt)), endDate:fmtDateISO(new Date(a.createdAt))}), sort:a=>a.createdAt },
     { key:'act', label:'관리', filter:false, stop:true, html:a=>`<div class="row-actions"><button class="del" onclick="confirmDeleteApplication('${a.id}')">삭제</button></div>` },
@@ -1160,6 +1137,153 @@ async function doDeleteGroup(id){
   if(!confirm('이 그룹을 삭제할까요? 아티스트는 그대로 남아요.')) return;
   try{ await apiCall('resource=groups&id='+encodeURIComponent(id), {method:'DELETE'}); await reloadAfter('그룹을 삭제했어요.'); }
   catch(e){ showToast(e.message); }
+}
+
+/* =========================================================
+   카테고리별 일정 양식
+   - 발매(정규·EP·싱글·컴필레이션·믹스테입): 발매일 하루 + 시간
+   - 콘서트: 시작일·종료일 여러 개
+   - 피지컬: 시작일·종료일 한 쌍
+========================================================= */
+const RELEASE_CATS = ['regular','ep','single','mixtape','compilation'];
+const isRelease = c => RELEASE_CATS.includes(c);
+function rangesOf(s){ return (s.ranges && s.ranges.length) ? s.ranges : [{ start:s.startDate, end:s.endDate }]; }
+function overlapsAny(s, from, to){ return rangesOf(s).some(r=> r.start<=to && r.end>=from); }
+function nextRangeOf(s){ const t = fmtDateISO(new Date()); const rs = rangesOf(s); return rs.find(r=>r.end>=t) || rs[rs.length-1]; }
+function fmtRangeCompact(a, b, withYear){
+  const [y1,m1,d1] = a.split('-').map(Number), [y2,m2,d2] = b.split('-').map(Number);
+  const first = withYear ? `${y1}년 ${m1}월 ${d1}일` : `${m1}월 ${d1}일`;
+  if(a===b) return first;
+  if(y1===y2 && m1===m2) return `${first} ~ ${d2}일`;
+  if(y1===y2) return `${first} ~ ${m2}월 ${d2}일`;
+  return `${first} ~ ${y2}년 ${m2}월 ${d2}일`;
+}
+function fmtWhenKR(s){
+  if(isRelease(s.category)) return fmtDateKR(s.startDate) + (s.time ? ' ' + s.time : '');
+  let prevY = null;
+  return rangesOf(s).map(r=>{ const y = r.start.slice(0,4); const t = fmtRangeCompact(r.start, r.end, y!==prevY); prevY = y; return t; }).join(', ');
+}
+
+let rangeSeq = 0;
+function dateFieldHtml(id, label, iso){
+  const [y,m,d] = (iso||'').split('-');
+  const inp = (cls, len, ph, v, suf)=>`<input class="${cls}" type="text" inputmode="numeric" maxlength="${len}" placeholder="${ph}" id="${id}-${suf}" value="${v||''}" autocomplete="off">`;
+  return `<div class="field"><label>${label}</label><div class="date-group">${inp('y',4,'YYYY',y,'y')}${inp('m',2,'MM',m,'m')}${inp('d',2,'DD',d,'d')}</div>
+    <div class="date-group-label"><span>년</span><span>월</span><span>일</span></div></div>`;
+}
+function rangeBlockHtml(p, i, r, multi){
+  const rid = `${p}-g${rangeSeq++}`;
+  return `<div class="range-block" data-rid="${rid}">
+    ${multi ? `<div class="range-head"><b>기간 ${i+1}</b>${i>0 ? `<button type="button" class="range-remove" onclick="removeRangeBlock(this)" title="빼기">✕</button>` : ''}</div>` : ''}
+    ${dateFieldHtml(rid+'-s', '시작일', r.start)}${dateFieldHtml(rid+'-e', '종료일', r.end)}
+  </div>`;
+}
+function whenSectionHtml(p, cat, v){
+  v = v || {};
+  if(isRelease(cat)){
+    const [hh, mm] = (v.time||'').split(':');
+    return `${dateFieldHtml(p+'-rd', '발매일', v.startDate)}
+      <div class="field"><label>시간</label><div class="time-group">
+        <input id="${p}-hh" type="text" inputmode="numeric" maxlength="2" placeholder="HH" value="${hh||''}" autocomplete="off"><span>:</span>
+        <input id="${p}-mm" type="text" inputmode="numeric" maxlength="2" placeholder="MM" value="${mm||''}" autocomplete="off">
+      </div></div>`;
+  }
+  const rs = (cat==='concert' && v.ranges && v.ranges.length) ? v.ranges : [{ start:v.startDate||'', end:v.endDate||'' }];
+  if(cat==='concert'){
+    return `<div class="range-list" id="${p}-ranges">${rs.map((r,i)=>rangeBlockHtml(p, i, r, true)).join('')}
+      <button type="button" class="artist-add" onclick="addRangeBlock('${p}')">+ 기간 추가</button></div>`;
+  }
+  return rangeBlockHtml(p, 0, rs[0], false);
+}
+function bindPair(rid){
+  const parts = ['y','m','d'], lim = { y:[4,null], m:[2,12], d:[2,31] };
+  parts.forEach(k=>{ ['s','e'].forEach(se=>{ const el = document.getElementById(`${rid}-${se}-${k}`); if(el && !el.dataset.bound){ clampDigits(el, lim[k][0], lim[k][1]); el.dataset.bound = '1'; } }); });
+  parts.forEach(k=>{
+    const s = document.getElementById(`${rid}-s-${k}`);
+    if(s && !s.dataset.copy){ s.dataset.copy = '1'; s.addEventListener('input', ()=>{ parts.forEach(q=>{ document.getElementById(`${rid}-e-${q}`).value = document.getElementById(`${rid}-s-${q}`).value; }); }); }
+  });
+}
+function bindWhenSection(p){
+  const box = document.getElementById(p+'-when'); if(!box) return;
+  box.querySelectorAll('.range-block').forEach(b=> bindPair(b.dataset.rid));
+  const rd = { y:[4,null], m:[2,12], d:[2,31] };
+  Object.keys(rd).forEach(k=>{ const el = document.getElementById(`${p}-rd-${k}`); if(el && !el.dataset.bound){ clampDigits(el, rd[k][0], rd[k][1]); el.dataset.bound='1'; } });
+  [['hh',23],['mm',59]].forEach(([k,max])=>{ const el = document.getElementById(`${p}-${k}`); if(el && !el.dataset.bound){ clampDigits(el, 2, max); el.dataset.bound='1'; } });
+}
+function addRangeBlock(p){
+  const list = document.getElementById(p+'-ranges');
+  const n = list.querySelectorAll('.range-block').length;
+  list.querySelector('.artist-add').insertAdjacentHTML('beforebegin', rangeBlockHtml(p, n, {start:'',end:''}, true));
+  const blocks = list.querySelectorAll('.range-block');
+  const b = blocks[blocks.length-1]; bindPair(b.dataset.rid);
+  document.getElementById(`${b.dataset.rid}-s-y`).focus();
+}
+function removeRangeBlock(btn){
+  const list = btn.closest('.range-list');
+  btn.closest('.range-block').remove();
+  list.querySelectorAll('.range-head b').forEach((el,i)=> el.textContent = `기간 ${i+1}`);
+}
+// 카테고리를 바꿀 때 이미 쓴 날짜를 최대한 옮기기 위해 오류 없이 읽기
+function peekWhen(p, cat){
+  if(isRelease(cat)){ const d = readDateGroup(p+'-rd'); const hh = (document.getElementById(p+'-hh')||{}).value, mm = (document.getElementById(p+'-mm')||{}).value;
+    return { startDate:d||'', endDate:d||'', time: hh ? `${hh.padStart(2,'0')}:${(mm||'0').padStart(2,'0')}` : '' }; }
+  const rs = Array.from(document.querySelectorAll(`#${p}-when .range-block`)).map(b=>({ start: readDateGroup(b.dataset.rid+'-s')||'', end: readDateGroup(b.dataset.rid+'-e')||'' })).filter(r=>r.start||r.end);
+  return { startDate: rs[0] ? rs[0].start : '', endDate: rs[0] ? rs[0].end : '', ranges: rs };
+}
+function readWhen(p, cat){
+  if(isRelease(cat)){
+    const date = readDateGroup(p+'-rd');
+    if(!date) return { error:'발매일을 올바르게 입력해주세요.' };
+    const hh = document.getElementById(p+'-hh').value.trim(), mm = document.getElementById(p+'-mm').value.trim();
+    if(!hh && mm) return { error:'시간의 시(HH)를 입력해주세요.' };
+    return { date, time: hh ? `${hh.padStart(2,'0')}:${(mm||'0').padStart(2,'0')}` : '' };
+  }
+  const ranges = [];
+  for(const b of document.querySelectorAll(`#${p}-when .range-block`)){
+    const s = readDateGroup(b.dataset.rid+'-s'), e = readDateGroup(b.dataset.rid+'-e');
+    if(!s) return { error:'시작일을 올바르게 입력해주세요.' };
+    if(!e) return { error:'종료일을 올바르게 입력해주세요.' };
+    if(e < s) return { error:'종료일이 시작일보다 빠를 수 없어요.' };
+    ranges.push({ start:s, end:e });
+  }
+  if(cat==='concert') return { ranges };
+  return { startDate: ranges[0].start, endDate: ranges[0].end };
+}
+function scheduleFormHtml(p, v){
+  v = v || {};
+  const cat = v.category || 'regular';
+  return `<div id="${p}-when" class="when-box">${whenSectionHtml(p, cat, v)}</div>
+    ${artistFieldsHtml(p, v.artists || [])}
+    <div class="field"><label>카테고리</label><select id="${p}-category">${ALL_CATS.map(k=>`<option value="${k}" ${cat===k?'selected':''}>${CATEGORIES[k].label}</option>`).join('')}</select></div>
+    <div class="field"><label id="${p}-title-label">${isRelease(cat)?'앨범명':'일정'}</label><input type="text" id="${p}-title" value="${escapeHtml(v.title||'')}" autocomplete="off"></div>
+    <div class="field" id="${p}-venue-wrap" style="${cat==='concert'?'':'display:none'}"><label>공연장</label><input type="text" id="${p}-venue" value="${escapeHtml(v.venue||'')}" autocomplete="off"></div>
+    <div class="field"><label>비고</label><textarea id="${p}-note">${escapeHtml(v.note||'')}</textarea></div>`;
+}
+function bindScheduleForm(p){
+  bindWhenSection(p);
+  const sel = document.getElementById(p+'-category');
+  sel.dataset.prev = sel.value;
+  sel.onchange = ()=>{
+    const prev = sel.dataset.prev, cat = sel.value;
+    const v = peekWhen(p, prev);
+    document.getElementById(p+'-when').innerHTML = whenSectionHtml(p, cat, v);
+    bindWhenSection(p);
+    document.getElementById(p+'-title-label').textContent = isRelease(cat) ? '앨범명' : '일정';
+    document.getElementById(p+'-venue-wrap').style.display = cat==='concert' ? '' : 'none';
+    sel.dataset.prev = cat;
+  };
+}
+function readScheduleForm(p){
+  const category = document.getElementById(p+'-category').value;
+  const when = readWhen(p, category);
+  if(when.error) return { error: when.error };
+  const artists = readArtistFields(p);
+  if(!artists.length) return { error:'아티스트를 1명 이상 입력해주세요.' };
+  const title = document.getElementById(p+'-title').value.trim();
+  if(!title) return { error: isRelease(category) ? '앨범명을 입력해주세요.' : '일정을 입력해주세요.' };
+  const venue = category==='concert' ? document.getElementById(p+'-venue').value.trim() : '';
+  const note = document.getElementById(p+'-note').value.trim();
+  return { data: { category, ...when, artists, title, venue, note } };
 }
 
 /* ---- 로그인 상태 (오른쪽 위) ---- */
