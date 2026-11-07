@@ -67,6 +67,31 @@ function withArtists(x) {
   else x.artists = x.artist ? [String(x.artist)] : [];
   return x;
 }
+// 카테고리별 날짜: 발매 = 하루+시간, 콘서트 = 기간 여러 개, 피지컬 = 기간 하나
+const RELEASE_CATS = ['regular', 'ep', 'single', 'mixtape', 'compilation'];
+const isISO = (v) => /^\d{4}-\d{2}-\d{2}$/.test(String(v || ''));
+function normalizeWhen(b, category) {
+  if (RELEASE_CATS.includes(category)) {
+    const d = b.date || b.startDate;
+    if (!isISO(d)) return { error: '발매일을 입력해주세요.' };
+    const time = String(b.time || '').trim();
+    if (time && !/^([01]\d|2[0-3]):[0-5]\d$/.test(time)) return { error: '시간 형식이 올바르지 않아요. (예: 18:00)' };
+    return { startDate: d, endDate: d, time, ranges: null };
+  }
+  let ranges = Array.isArray(b.ranges) && b.ranges.length ? b.ranges : [{ start: b.startDate, end: b.endDate }];
+  ranges = ranges.map((r) => ({ start: r && r.start, end: (r && (r.end || r.start)) }));
+  if (ranges.some((r) => !isISO(r.start) || !isISO(r.end))) return { error: '기간을 올바르게 입력해주세요.' };
+  if (ranges.some((r) => r.end < r.start)) return { error: '종료일이 시작일보다 빠를 수 없어요.' };
+  if (category !== 'concert') ranges = ranges.slice(0, 1);
+  ranges.sort((x, y) => x.start.localeCompare(y.start));
+  const endDate = ranges.reduce((m, r) => (r.end > m ? r.end : m), ranges[0].end);
+  return { startDate: ranges[0].start, endDate, time: '', ranges: ranges.length > 1 ? ranges.slice(0, 30) : null };
+}
+function applyWhen(target, w) {
+  target.startDate = w.startDate; target.endDate = w.endDate; target.time = w.time;
+  if (w.ranges) target.ranges = w.ranges; else delete target.ranges;
+}
+
 function cleanArtists(b) {
   const src = Array.isArray(b.artists) ? b.artists : (b.artist ? [b.artist] : []);
   const out = [];
@@ -123,7 +148,7 @@ const CAT_COLORS = { regular: '#7C5CFC', ep: '#12B886', single: '#228BE6', mixta
 const HEART_SVG = 'data:image/svg+xml;utf8,' + encodeURIComponent('<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path fill="#E03131" d="M12 21s-7.5-4.6-10-9.3C.3 8.3 2.2 4.5 5.9 4.1 8.1 3.9 10 5 12 7.2 14 5 15.9 3.9 18.1 4.1c3.7.4 5.6 4.2 3.9 7.6C19.5 16.4 12 21 12 21z"/></svg>');
 
 function cardVersion(s) {
-  const str = [s.artist, s.title, s.venue, s.startDate, s.endDate, s.category, s.likes || 0].join('|');
+  const str = [s.artist, s.title, s.venue, s.startDate, s.endDate, s.time || '', JSON.stringify(s.ranges || []), s.category, s.likes || 0].join('|');
   let h = 5381;
   for (let i = 0; i < str.length; i++) h = ((h << 5) + h + str.charCodeAt(i)) >>> 0;
   return h.toString(36);
@@ -180,7 +205,7 @@ async function renderCardPng(s) {
   const label = CATEGORY_LABELS[s.category] || s.category;
   const color = CAT_COLORS[s.category] || '#6C5CFC';
   const artist = clip(s.artist, 40);
-  const meta = clip(fmtRange(s.startDate, s.endDate) + (s.title ? ' · ' + s.title : '') + (s.venue ? ' · ' + s.venue : ''), 110);
+  const meta = clip(fmtWhen(s) + (s.title ? ' · ' + s.title : '') + (s.venue ? ' · ' + s.venue : ''), 110);
   const likes = String(s.likes || 0);
   const allText = label + artist + meta + likes + 'Sokury…0123456789';
 
@@ -508,13 +533,14 @@ async function handleSchedules(req, res, id, action) {
 
   if (m === 'POST' && !id && !action) {
     const b = getBody(req);
-    const { startDate, endDate, category, title, note, venue } = b;
+    const { category, title, note, venue } = b;
     const artists = cleanArtists(b);
-    if (!startDate || !endDate || !artists.length || !category) {
-      return res.status(400).json({ error: '시작일, 종료일, 아티스트, 카테고리는 필수입니다.' });
-    }
+    if (!artists.length || !category) return res.status(400).json({ error: '아티스트와 카테고리는 필수입니다.' });
+    const w = normalizeWhen(b, category);
+    if (w.error) return res.status(400).json({ error: w.error });
     const list = await readList('schedules');
-    const item = { id: uid('s'), startDate, endDate, artists, artist: artists.join(', '), category, title: title || '', venue: venue || '', note: note || '', likes: 0, createdAt: Date.now() };
+    const item = { id: uid('s'), artists, artist: artists.join(', '), category, title: title || '', venue: category === 'concert' ? (venue || '') : '', note: note || '', likes: 0, createdAt: Date.now() };
+    applyWhen(item, w);
     await ensureRegistry(artists);
     list.push(item);
     await writeList('schedules', list);
@@ -526,9 +552,17 @@ async function handleSchedules(req, res, id, action) {
     const i = list.findIndex((x) => x.id === id);
     if (i === -1) return res.status(404).json({ error: '일정을 찾을 수 없습니다.' });
     const b = getBody(req);
-    for (const k of ['startDate', 'endDate', 'category', 'title', 'venue', 'note']) {
-      if (b[k] !== undefined) list[i][k] = b[k];
+    const cur = list[i];
+    const touchesWhen = ['date', 'time', 'startDate', 'endDate', 'ranges', 'category'].some((k) => b[k] !== undefined);
+    if (touchesWhen) {
+      const category = b.category !== undefined ? b.category : cur.category;
+      const w = normalizeWhen({ startDate: cur.startDate, endDate: cur.endDate, ranges: cur.ranges, time: cur.time, ...b }, category);
+      if (w.error) return res.status(400).json({ error: w.error });
+      cur.category = category;
+      applyWhen(cur, w);
     }
+    for (const k of ['title', 'venue', 'note']) if (b[k] !== undefined) cur[k] = b[k];
+    if (cur.category !== 'concert') cur.venue = '';
     if (b.artists !== undefined || b.artist !== undefined) {
       const artists = cleanArtists(b);
       if (!artists.length) return res.status(400).json({ error: '아티스트는 최소 1명 필요합니다.' });
@@ -559,15 +593,19 @@ async function handleApplications(req, res, id) {
 
   if (m === 'POST' && !id) {
     const b = getBody(req);
-    const { startDate, endDate, category, name, note, venue } = b;
+    const { category, name, note, venue } = b;
     const artists = cleanArtists(b);
     const artist = artists.join(', ');
-    if (!startDate || !endDate || !artists.length || !category || !name) {
+    const w = normalizeWhen(b, category);
+    if (w.error) return res.status(400).json({ error: w.error });
+    const { startDate, endDate } = w;
+    if (!artists.length || !category || !name) {
       return res.status(400).json({ error: '시작일, 종료일, 아티스트, 카테고리, 일정은 필수입니다.' });
     }
     const list = await readList('applications');
     const me = readSession(req);
-    const item = { id: uid('a'), startDate, endDate, artists, artist, category, name, venue: venue || '', note: note || '', status: 'pending', createdAt: Date.now() };
+    const item = { id: uid('a'), startDate, endDate, artists, artist, category, name, venue: category === 'concert' ? (venue || '') : '', note: note || '', status: 'pending', createdAt: Date.now() };
+    applyWhen(item, w);
     if (me) { item.ownerSub = me.sub; item.ownerEmail = me.email; }
     list.push(item);
     await writeList('applications', list);
@@ -613,6 +651,20 @@ function fmtKR(iso) {
   return `${y}년 ${m}월 ${d}일`;
 }
 function fmtRange(a, b) { return (!b || a === b) ? fmtKR(a) : `${fmtKR(a)} ~ ${fmtKR(b)}`; }
+function fmtRangeCompact(a, b, withYear) {
+  const [y1, m1, d1] = a.split('-').map(Number), [y2, m2, d2] = b.split('-').map(Number);
+  const first = withYear ? `${y1}년 ${m1}월 ${d1}일` : `${m1}월 ${d1}일`;
+  if (a === b) return first;
+  if (y1 === y2 && m1 === m2) return `${first} ~ ${d2}일`;
+  if (y1 === y2) return `${first} ~ ${m2}월 ${d2}일`;
+  return `${first} ~ ${y2}년 ${m2}월 ${d2}일`;
+}
+function fmtWhen(s) {
+  if (RELEASE_CATS.includes(s.category)) return fmtKR(s.startDate) + (s.time ? ' ' + s.time : '');
+  const rs = s.ranges && s.ranges.length ? s.ranges : [{ start: s.startDate, end: s.endDate }];
+  let prevY = null;
+  return rs.map((r) => { const y = r.start.slice(0, 4); const t = fmtRangeCompact(r.start, r.end, y !== prevY); prevY = y; return t; }).join(', ');
+}
 
 // 카카오톡·디스코드·X·인스타 DM 등은 링크를 붙여넣으면 이 페이지의 <meta> 태그를 읽어서
 // 미리보기 카드를 만듭니다. 사람이 열면 바로 메인 사이트의 해당 일정 팝업으로 이동합니다.
@@ -630,7 +682,7 @@ async function handleShare(req, res, id) {
   if (s) {
     const cat = CATEGORY_LABELS[s.category] || s.category;
     title = s.title ? `${s.artist} - ${s.title}` : s.artist;
-    desc = `[${cat}] ${fmtRange(s.startDate, s.endDate)}${s.venue ? ' · ' + s.venue : ''} · ❤️ ${s.likes || 0}`;
+    desc = `[${cat}] ${fmtWhen(s)}${s.venue ? ' · ' + s.venue : ''} · ❤️ ${s.likes || 0}`;
     image = `${origin}/og/${encodeURIComponent(s.id)}?v=${cardVersion(s)}`;
     target = `/#/?schedule=${encodeURIComponent(s.id)}`;
   }
