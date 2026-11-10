@@ -229,6 +229,8 @@
   .range-head{display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;font-size:13px;}
   .range-remove{width:24px;height:24px;border-radius:50%;border:none;background:var(--surface-2);color:var(--text-faint);cursor:pointer;font-size:11px;}
   .range-remove:hover{color:var(--danger);}
+  .when-check{display:inline-flex;align-items:center;gap:6px;font-size:13px;color:var(--text-dim);font-weight:600;cursor:pointer;user-select:none;margin:-4px 0 12px;}
+  .when-check input{accent-color:var(--accent);margin:0;width:auto;}
 </style>
 </head>
 <body>
@@ -1141,8 +1143,8 @@ async function doDeleteGroup(id){
 
 /* =========================================================
    카테고리별 일정 양식
-   - 발매(정규·EP·싱글·컴필레이션·믹스테입): 발매일 하루 + 시간
-   - 콘서트: 시작일·종료일 여러 개
+   - 발매(정규·EP·싱글·컴필레이션·믹스테입): 발매일 하루 + (선택) 시간
+   - 콘서트: 일정 여러 개, 일정마다 공연일 하루 또는 기간(시작일·종료일)
    - 피지컬: 시작일·종료일 한 쌍
 ========================================================= */
 const RELEASE_CATS = ['regular','ep','single','mixtape','compilation'];
@@ -1168,22 +1170,48 @@ let rangeSeq = 0;
 function dateFieldHtml(id, label, iso){
   const [y,m,d] = (iso||'').split('-');
   const inp = (cls, len, ph, v, suf)=>`<input class="${cls}" type="text" inputmode="numeric" maxlength="${len}" placeholder="${ph}" id="${id}-${suf}" value="${v||''}" autocomplete="off">`;
-  return `<div class="field"><label>${label}</label><div class="date-group">${inp('y',4,'YYYY',y,'y')}${inp('m',2,'MM',m,'m')}${inp('d',2,'DD',d,'d')}</div>
+  return `<div class="field" id="${id}-wrap"><label id="${id}-label">${label}</label><div class="date-group">${inp('y',4,'YYYY',y,'y')}${inp('m',2,'MM',m,'m')}${inp('d',2,'DD',d,'d')}</div>
     <div class="date-group-label"><span>년</span><span>월</span><span>일</span></div></div>`;
 }
 function rangeBlockHtml(p, i, r, multi){
   const rid = `${p}-g${rangeSeq++}`;
+  if(multi){
+    // 콘서트: 기본은 공연일 하루, '기간으로 설정'을 체크하면 시작일·종료일
+    const isPeriod = !!(r.start && r.end && r.start !== r.end);
+    return `<div class="range-block" data-rid="${rid}">
+      <div class="range-head"><b>일정 ${i+1}</b>${i>0 ? `<button type="button" class="range-remove" onclick="removeRangeBlock(this)" title="빼기">✕</button>` : ''}</div>
+      ${dateFieldHtml(rid+'-s', isPeriod ? '시작일' : '공연일', r.start)}
+      <div id="${rid}-e-box" style="${isPeriod ? '' : 'display:none'}">${dateFieldHtml(rid+'-e', '종료일', r.end || r.start)}</div>
+      <label class="when-check"><input type="checkbox" id="${rid}-period" ${isPeriod ? 'checked' : ''} onchange="togglePeriod('${rid}')">기간으로 설정</label>
+    </div>`;
+  }
   return `<div class="range-block" data-rid="${rid}">
-    ${multi ? `<div class="range-head"><b>기간 ${i+1}</b>${i>0 ? `<button type="button" class="range-remove" onclick="removeRangeBlock(this)" title="빼기">✕</button>` : ''}</div>` : ''}
     ${dateFieldHtml(rid+'-s', '시작일', r.start)}${dateFieldHtml(rid+'-e', '종료일', r.end)}
   </div>`;
+}
+function isPeriodBlock(rid){ const cb = document.getElementById(rid+'-period'); return !cb || cb.checked; }
+function togglePeriod(rid){
+  const on = isPeriodBlock(rid);
+  document.getElementById(rid+'-e-box').style.display = on ? '' : 'none';
+  document.getElementById(rid+'-s-label').textContent = on ? '시작일' : '공연일';
+  // 하루 → 기간: 종료일이 비어 있으면 공연일로 채움 / 기간 → 하루: 공연일 칸에는 시작일이 그대로 남음
+  if(on && !document.getElementById(rid+'-e-y').value){
+    ['y','m','d'].forEach(q=>{ document.getElementById(`${rid}-e-${q}`).value = document.getElementById(`${rid}-s-${q}`).value; });
+  }
+}
+function toggleTime(p){
+  const on = document.getElementById(p+'-time-on').checked;
+  document.getElementById(p+'-time-wrap').style.display = on ? '' : 'none';
+  if(on) document.getElementById(p+'-hh').focus();
 }
 function whenSectionHtml(p, cat, v){
   v = v || {};
   if(isRelease(cat)){
     const [hh, mm] = (v.time||'').split(':');
+    const hasTime = !!v.time;
     return `${dateFieldHtml(p+'-rd', '발매일', v.startDate)}
-      <div class="field"><label>시간</label><div class="time-group">
+      <label class="when-check"><input type="checkbox" id="${p}-time-on" ${hasTime ? 'checked' : ''} onchange="toggleTime('${p}')">시간 입력</label>
+      <div class="field" id="${p}-time-wrap" style="${hasTime ? '' : 'display:none'}"><label>시간</label><div class="time-group">
         <input id="${p}-hh" type="text" inputmode="numeric" maxlength="2" placeholder="HH" value="${hh||''}" autocomplete="off"><span>:</span>
         <input id="${p}-mm" type="text" inputmode="numeric" maxlength="2" placeholder="MM" value="${mm||''}" autocomplete="off">
       </div></div>`;
@@ -1191,7 +1219,7 @@ function whenSectionHtml(p, cat, v){
   const rs = (cat==='concert' && v.ranges && v.ranges.length) ? v.ranges : [{ start:v.startDate||'', end:v.endDate||'' }];
   if(cat==='concert'){
     return `<div class="range-list" id="${p}-ranges">${rs.map((r,i)=>rangeBlockHtml(p, i, r, true)).join('')}
-      <button type="button" class="artist-add" onclick="addRangeBlock('${p}')">+ 기간 추가</button></div>`;
+      <button type="button" class="artist-add" onclick="addRangeBlock('${p}')">+ 일정 추가</button></div>`;
   }
   return rangeBlockHtml(p, 0, rs[0], false);
 }
@@ -1221,27 +1249,30 @@ function addRangeBlock(p){
 function removeRangeBlock(btn){
   const list = btn.closest('.range-list');
   btn.closest('.range-block').remove();
-  list.querySelectorAll('.range-head b').forEach((el,i)=> el.textContent = `기간 ${i+1}`);
+  list.querySelectorAll('.range-head b').forEach((el,i)=> el.textContent = `일정 ${i+1}`);
 }
 // 카테고리를 바꿀 때 이미 쓴 날짜를 최대한 옮기기 위해 오류 없이 읽기
 function peekWhen(p, cat){
-  if(isRelease(cat)){ const d = readDateGroup(p+'-rd'); const hh = (document.getElementById(p+'-hh')||{}).value, mm = (document.getElementById(p+'-mm')||{}).value;
+  if(isRelease(cat)){ const d = readDateGroup(p+'-rd'); const tOn = (document.getElementById(p+'-time-on')||{}).checked;
+    const hh = tOn ? (document.getElementById(p+'-hh')||{}).value : '', mm = tOn ? (document.getElementById(p+'-mm')||{}).value : '';
     return { startDate:d||'', endDate:d||'', time: hh ? `${hh.padStart(2,'0')}:${(mm||'0').padStart(2,'0')}` : '' }; }
-  const rs = Array.from(document.querySelectorAll(`#${p}-when .range-block`)).map(b=>({ start: readDateGroup(b.dataset.rid+'-s')||'', end: readDateGroup(b.dataset.rid+'-e')||'' })).filter(r=>r.start||r.end);
+  const rs = Array.from(document.querySelectorAll(`#${p}-when .range-block`)).map(b=>{ const s = readDateGroup(b.dataset.rid+'-s')||''; return { start: s, end: isPeriodBlock(b.dataset.rid) ? (readDateGroup(b.dataset.rid+'-e')||'') : s }; }).filter(r=>r.start||r.end);
   return { startDate: rs[0] ? rs[0].start : '', endDate: rs[0] ? rs[0].end : '', ranges: rs };
 }
 function readWhen(p, cat){
   if(isRelease(cat)){
     const date = readDateGroup(p+'-rd');
     if(!date) return { error:'발매일을 올바르게 입력해주세요.' };
-    const hh = document.getElementById(p+'-hh').value.trim(), mm = document.getElementById(p+'-mm').value.trim();
+    const tOn = document.getElementById(p+'-time-on').checked;
+    const hh = tOn ? document.getElementById(p+'-hh').value.trim() : '', mm = tOn ? document.getElementById(p+'-mm').value.trim() : '';
     if(!hh && mm) return { error:'시간의 시(HH)를 입력해주세요.' };
     return { date, time: hh ? `${hh.padStart(2,'0')}:${(mm||'0').padStart(2,'0')}` : '' };
   }
   const ranges = [];
   for(const b of document.querySelectorAll(`#${p}-when .range-block`)){
-    const s = readDateGroup(b.dataset.rid+'-s'), e = readDateGroup(b.dataset.rid+'-e');
-    if(!s) return { error:'시작일을 올바르게 입력해주세요.' };
+    const period = isPeriodBlock(b.dataset.rid);
+    const s = readDateGroup(b.dataset.rid+'-s'), e = period ? readDateGroup(b.dataset.rid+'-e') : s;
+    if(!s) return { error: period ? '시작일을 올바르게 입력해주세요.' : '공연일을 올바르게 입력해주세요.' };
     if(!e) return { error:'종료일을 올바르게 입력해주세요.' };
     if(e < s) return { error:'종료일이 시작일보다 빠를 수 없어요.' };
     ranges.push({ start:s, end:e });
